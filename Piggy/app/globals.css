@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+}
+
+@layer components {
+  /* Big, thumb-friendly buttons */
+  .btn {
+    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl px-5 py-3 text-base font-semibold transition active:scale-[0.98];
+  }
+
+  .btn-green {
+    @apply btn bg-emerald-600 text-white shadow-sm hover:bg-emerald-700;
+  }
+
+  .btn-blue {
+    @apply btn bg-sky-600 text-white shadow-sm hover:bg-sky-700;
+  }
+
+  .btn-outline {
+    @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-100;
+  }
+
+  .btn-danger {
+    @apply btn bg-rose-50 text-rose-600 hover:bg-rose-100;
+  }
+
+  /* Large inputs (16px stops iOS Safari zooming) */
+  .input {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200;
+  }
+
+  .label {
+    @apply mb-1 block text-sm font-semibold text-slate-600;
+  }
+
+  .card {
+    @apply rounded-2xl border border-slate-100 bg-white p-4 shadow-sm;
+  }
+
+  .section-title {
+    @apply mb-3 flex items-center gap-2 text-lg font-bold text-slate-800;
+  }
+
+  .pill {
+    @apply inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700;
+  }
+
+  .muted {
+    @apply text-sm text-slate-500;
+  }
+}
