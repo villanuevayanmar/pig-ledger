@@ -1,5 +1,3 @@
-// Minimal inline icon set (Lucide-style stroke icons, no emoji, no extra deps).
-// Use: <Icon name="home" className="h-5 w-5" />
 import type { ReactNode } from 'react';
 
 const PATHS: Record<string, ReactNode> = {
