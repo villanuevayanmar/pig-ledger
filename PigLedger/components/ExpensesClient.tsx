@@ -80,14 +80,13 @@ export async function syncLedgerNow(): Promise<LocalLedger> {
         await saveLocalLedger(local);
       }
     } catch {
-      return local; // still offline — keep queue
+      return local;
     }
   }
   try {
     const fresh = await pullServerLedger();
     if (fresh) return fresh;
   } catch {
-    // offline — fall through
   }
   return loadLocalLedger();
 }
