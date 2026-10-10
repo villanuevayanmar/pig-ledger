@@ -14,7 +14,6 @@ function str(v: FormDataEntryValue | null, fallback = ''): string {
   return typeof v === 'string' ? v.trim() : fallback;
 }
 
-/* ---------- Expenses ---------- */
 
 export async function addExpense(formData: FormData): Promise<void> {
   if (!supabaseConfigured) return;
@@ -46,7 +45,6 @@ export async function deleteExpense(id: string): Promise<void> {
   refreshAll();
 }
 
-/* ---------- Sales ---------- */
 
 export async function addSale(formData: FormData): Promise<void> {
   if (!supabaseConfigured) return;
@@ -77,7 +75,6 @@ export async function deleteSale(id: string): Promise<void> {
   refreshAll();
 }
 
-/* ---------- Farm setup ---------- */
 
 export async function updateFarm(formData: FormData): Promise<void> {
   if (!supabaseConfigured) return;
@@ -95,7 +92,6 @@ export async function updateFarm(formData: FormData): Promise<void> {
   refreshAll();
 }
 
-/* ---------- Backup restore / clear ---------- */
 
 type BackupPayload = {
   farm?: { name?: string; pigCount?: number };
