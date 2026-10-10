@@ -8,12 +8,6 @@ function str(v: unknown, fallback = ''): string {
   return typeof v === 'string' ? v.trim() : fallback;
 }
 
-/**
- * POST /api/sync — receive offline queue from the phone.
- * Body: { ops: PendingOp[] }. Last-write-wins: inserts/deletes are replayed
- * in order. Local temp ids (local-*) are NOT sent to Supabase — server rows
- * get real ids, client re-downloads after sync.
- */
 export async function POST(req: Request) {
   if (!supabaseConfigured) {
     return NextResponse.json({ ok: false, message: 'Supabase is not connected yet.' }, { status: 503 });
@@ -53,7 +47,7 @@ export async function POST(req: Request) {
           await sb.from('expenses').delete().eq('id', op.id);
           applied++;
         } else {
-          applied++; // local-only row, nothing to delete on server
+          applied++; 
         }
       } else if (op.kind === 'add-sale') {
         const s = op.sale;
@@ -87,7 +81,6 @@ export async function POST(req: Request) {
         applied++;
       }
     } catch {
-      // Skip bad op, continue with the rest.
     }
   }
 
