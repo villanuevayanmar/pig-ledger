@@ -5,10 +5,6 @@ import { addExpense } from '@/app/actions';
 import { CATEGORIES, UNITS } from '@/lib/types';
 import { fmt, num, today } from '@/lib/format';
 
-/**
- * Add-expense form. Line total = qty × price, recalculated live as you type.
- * Saves through a Server Action, then clears itself for the next entry.
- */
 export default function ExpenseForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const [qty, setQty] = useState('');
