@@ -7,10 +7,6 @@ import { clearAll, importAll } from '@/app/actions';
 import { today } from '@/lib/format';
 import type { Expense, Farm, Sale, Totals } from '@/lib/types';
 
-/**
- * Backup panel: download a JSON copy of the ledger, restore it later,
- * print the ledger, or wipe everything.
- */
 export default function ExportImport({
   farm,
   expenses,
