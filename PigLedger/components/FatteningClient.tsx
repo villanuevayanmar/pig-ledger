@@ -4,24 +4,24 @@ import { useEffect, useState } from "react";
 import { computeFattening } from "@/lib/totals";
 import { fmt, fmtKg, num, round2 } from "@/lib/format";
 
-type FeedItem = { id: string; name: string; bags: number; kgPerBag: number; pricePerBag: number };
-type SaleItem = { id: string; weightKg: number; pricePerKg: number };
+type FeedItem = { id: string; name: string; bags: number; kgPerBag: number; pricePerBag: number | string };
+type SaleItem = { id: string; weightKg: number; pricePerKg: number | string };
 
 const DEFAULT_FEEDS: FeedItem[] = [
-  { id: "booster", name: "Booster", bags: 0, kgPerBag: 25, pricePerBag: 0 },
-  { id: "pre-starter", name: "Pre-Starter", bags: 0, kgPerBag: 25, pricePerBag: 0 },
-  { id: "starter", name: "Starter", bags: 0, kgPerBag: 25, pricePerBag: 0 },
-  { id: "grower", name: "Grower", bags: 0, kgPerBag: 25, pricePerBag: 0 },
-  { id: "finisher", name: "Finisher", bags: 0, kgPerBag: 25, pricePerBag: 0 }
+  { id: "booster", name: "Booster", bags: 0, kgPerBag: 25, pricePerBag: "" },
+  { id: "pre-starter", name: "Pre-Starter", bags: 0, kgPerBag: 25, pricePerBag: "" },
+  { id: "starter", name: "Starter", bags: 0, kgPerBag: 25, pricePerBag: "" },
+  { id: "grower", name: "Grower", bags: 0, kgPerBag: 25, pricePerBag: "" },
+  { id: "finisher", name: "Finisher", bags: 0, kgPerBag: 25, pricePerBag: "" }
 ];
-const DEFAULT_SALES: SaleItem[] = [{ id: "sale-1", weightKg: 0, pricePerKg: 0 }];
+const DEFAULT_SALES: SaleItem[] = [{ id: "sale-1", weightKg: 0, pricePerKg: "" }];
 
 interface FatteningClientProps {
   next?: string | null;
 }
 
 export default function FatteningClient({ next }: FatteningClientProps) {
-  const [ledger, setLedger] = useState(true);
+  const [ledger, setLedger] = useState(false);
   const [heads, setHeads] = useState(12);
   const [feeds, setFeeds] = useState([...DEFAULT_FEEDS]);
   const [sales, setSales] = useState([...DEFAULT_SALES]);
@@ -136,8 +136,8 @@ export default function FatteningClient({ next }: FatteningClientProps) {
                 <td className="p-2">{f.name}</td>
                 <td className="text-center p-2"><input type="number" value={f.bags} onChange={(e) => updateFeed(i, 'bags', num(e.target.value))} inputMode="numeric" min="0" step="1" className="input w-full" /></td>
                 <td className="text-center p-2"><input type="number" value={f.kgPerBag} onChange={(e) => updateFeed(i, 'kgPerBag', num(e.target.value))} inputMode="decimal" min="0" step="any" className="input w-full" /></td>
-                <td className="text-center p-2"><input type="number" value={f.pricePerBag} onChange={(e) => updateFeed(i, 'pricePerBag', num(e.target.value))} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td>
-                <td className="text-center p-2">{fmt(round2(f.bags * f.pricePerBag))}</td>
+                <td className="text-center p-2"><input type="number" value={f.pricePerBag} onChange={(e) => updateFeed(i, 'pricePerBag', e.target.value)} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td>
+                <td className="text-center p-2">{fmt(round2(f.bags * num(f.pricePerBag)))}</td>
                 <td className="text-center p-2">{fmtKg(round2(f.bags * f.kgPerBag))}</td>
               </tr>
             ))}
@@ -162,8 +162,8 @@ export default function FatteningClient({ next }: FatteningClientProps) {
               <tr key={s.id} className="border-b border-slate-200">
                 <td className="p-2">{s.id}</td>
                 <td className="text-center p-2"><input type="number" value={s.weightKg} onChange={(e) => updateSale(i, 'weightKg', num(e.target.value))} inputMode="decimal" min="0" step="any" className="input w-full" /></td>
-                <td className="text-center p-2"><input type="number" value={s.pricePerKg} onChange={(e) => updateSale(i, 'pricePerKg', num(e.target.value))} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td>
-                <td className="text-center p-2">{fmt(round2(s.weightKg * s.pricePerKg))}</td>
+                <td className="text-center p-2"><input type="number" value={s.pricePerKg} onChange={(e) => updateSale(i, 'pricePerKg', e.target.value)} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td>
+                <td className="text-center p-2">{fmt(round2(s.weightKg * num(s.pricePerKg)))}</td>
               </tr>
             ))}
           </tbody>

@@ -53,8 +53,8 @@ export function computeTotals(expenses: Expense[], sales: Sale[], pigCount: numb
 }
 
 export function computeFattening(
-  feeds: { name: string; bags: number; kgPerBag: number; pricePerBag: number }[],
-  sales: { weightKg: number; pricePerKg: number }[],
+  feeds: { name: string; bags: number; kgPerBag: number; pricePerBag: number | string }[],
+  sales: { weightKg: number; pricePerKg: number | string }[],
   heads: number,
   pigletPricePerHead = 0,
   medication = 0,
