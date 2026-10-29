@@ -49,7 +49,62 @@ export default function FatteningClient() {
       <p>Total Feed Cost: {fmt(summary.totalFeedCost)} ({fmtKg(summary.totalFeedKg)} kg)</p>
       <p>Total Sales: {fmt(summary.totalSales)}</p>
       <p>Net Profit: {fmt(summary.netProfit)}</p>
-      <p style={{ color: summary.profitPerHead >= 0 ? 'text-emerald-600' : 'text-rose-600' }}>
+      <p className="profit-per-head">
         Profit per Head: {summary.profitPerHead === null ? '—' : fmt(summary.profitPerHead)} / head
       </p>
-      <table className="w-full text-sm"><thead><tr className="border-b border-slate-200"><th className="text-left p-2 font-semibold text-slate-500">Feed</th><th className="text-center p-2 font-semibold text-slate-500">Bags</th><th className="text-center p-2 font-semibold text-slate-500">kg/bag</th><th className="text-center p-2 font-semibold text-slate-500">Price/bag (₱)</th><th className="text-center p-2 font-semibold text-slate-500">Amount (₱)</th><th className="text-center p-2 font-semibold text-slate-500">Total kg</th></tr></thead><tbody>{feeds.map((f,i)=>(<tr key={f.id} className="border-b border-slate-200"><td className="p-2">{f.name}</td><td className="text-center p-2"><input type="number" value={f.bags} onChange={(e)=>updateFeed(i,'bags',num(e.target.value))} inputMode="numeric" min="0" step="1" className="input w-full" /></td><td className="text-center p-2"><input type="number" value={f.kgPerBag} onChange={(e)=>updateFeed(i,'kgPerBag',num(e.target.value))} inputMode="decimal" min="0" step="any" className="input w-full" /></td><td className="text-center p-2"><input type="number" value={f.pricePerBag} onChange={(e)=>updateFeed(i,'pricePerBag',num(e.target.value))} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td><td className="text-center p-2">{fmt(round2(f.bags*f.pricePerBag))}</td><td className="text-center p-2">{fmtKg(round2(f.bags*f.kgPerBag))}</td></tr>))}</tbody></table><table className="w-full text-sm mt-4"><thead><tr className="border-b border-slate-200"><th className="text-left p-2 font-semibold text-slate-500">Description</th><th className="text-center p-2 font-semibold text-slate-500">Weight (kg)</th><th className="text-center p-2 font-semibold text-slate-500">Price / kg (₱)</th><th className="text-center p-2 font-semibold text-slate-500">Amount (₱)</th></tr></thead><tbody>{sales.map((s,i)=>(<tr key={s.id} className="border-b border-slate-200"><td className="p-2">{s.id}</td><td className="text-center p-2"><input type="number" value={s.weightKg} onChange={(e)=>updateSale(i,'weightKg',num(e.target.value))} inputMode="decimal" min="0" step="any" className="input w-full" /></td><td className="text-center p-2"><input type="number" value={s.pricePerKg} onChange={(e)=>updateSale(i,'pricePerKg',num(e.target.value))} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td><td className="text-center p-2">{fmt(round2(s.weightKg*s.pricePerKg))}</td></tr>))}</tbody></table><p>Net Profit: {fmt(summary.netProfit)}</p><p style={{ color: summary.profitPerHead >= 0 ? 'text-emerald-600' : 'text-rose-600' }}>Profit per Head: {summary.profitPerHead===null?'—':fmt(summary.profitPerHead)} / head</p></div>
+
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-200">
+            <th className="text-left p-2 font-semibold text-slate-500">Feed</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Bags</th>
+            <th className="text-center p-2 font-semibold text-slate-500">kg/bag</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Price/bag (₱)</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Amount (₱)</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Total kg</th>
+          </tr>
+        </thead>
+        <tbody>
+          {feeds.map((f, i) => (
+            <tr key={f.id} className="border-b border-slate-200">
+              <td className="p-2">{f.name}</td>
+              <td className="text-center p-2"><input type="number" value={f.bags} onChange={(e) => updateFeed(i, 'bags', num(e.target.value))} inputMode="numeric" min="0" step="1" className="input w-full" /></td>
+              <td className="text-center p-2"><input type="number" value={f.kgPerBag} onChange={(e) => updateFeed(i, 'kgPerBag', num(e.target.value))} inputMode="decimal" min="0" step="any" className="input w-full" /></td>
+              <td className="text-center p-2"><input type="number" value={f.pricePerBag} onChange={(e) => updateFeed(i, 'pricePerBag', num(e.target.value))} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td>
+              <td className="text-center p-2">{fmt(round2(f.bags * f.pricePerBag))}</td>
+              <td className="text-center p-2">{fmtKg(round2(f.bags * f.kgPerBag))}</td>
+            </tr>
+          ))}
+          <tr className="border-b border-slate-200"><td colSpan="6" className="p-2 text-slate-400">Enter feed details above</td></tr>
+        </tbody>
+      </table>
+
+      <table className="w-full text-sm mt-4">
+        <thead>
+          <tr className="border-b border-slate-200">
+            <th className="text-left p-2 font-semibold text-slate-500">Description</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Weight (kg)</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Price / kg (₱)</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Amount (₱)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sales.map((s, i) => (
+            <tr key={s.id} className="border-b border-slate-200">
+              <td className="p-2">{s.id}</td>
+              <td className="text-center p-2"><input type="number" value={s.weightKg} onChange={(e) => updateSale(i, 'weightKg', num(e.target.value))} inputMode="decimal" min="0" step="any" className="input w-full" /></td>
+              <td className="text-center p-2"><input type="number" value={s.pricePerKg} onChange={(e) => updateSale(i, 'pricePerKg', num(e.target.value))} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td>
+              <td className="text-center p-2">{fmt(round2(s.weightKg * s.pricePerKg))}</td>
+            </tr>
+          ))}
+          <tr className="border-b border-slate-200"><td colSpan="4" className="p-2 text-slate-400">Enter sale details above</td></tr>
+        </tbody>
+      </table>
+
+      <p>Net Profit: {fmt(summary.netProfit)}</p>
+      <p className="profit-per-head">
+        Profit per Head: {summary.profitPerHead === null ? '—' : fmt(summary.profitPerHead)} / head
+      </p>
+    </div>
+  );
+}
