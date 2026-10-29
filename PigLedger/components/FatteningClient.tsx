@@ -1,0 +1,127 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { computeFattening } from "@/lib/totals";
+import { fmt, fmtKg, num, round2 } from "@/lib/format";
+
+
+type FeedItem = { id: string; name: string; bags: number; kgPerBag: number; pricePerBag: number };
+type SaleItem = { id: string; weightKg: number; pricePerKg: number };
+
+const DEFAULT_FEEDS: FeedItem[] = [
+  { id: "booster", name: "Booster", bags: 0, kgPerBag: 25, pricePerBag: 0 },
+  { id: "pre-starter", name: "Pre-Starter", bags: 0, kgPerBag: 25, pricePerBag: 0 },
+  { id: "starter", name: "Starter", bags: 0, kgPerBag: 25, pricePerBag: 0 },
+  { id: "grower", name: "Grower", bags: 0, kgPerBag: 25, pricePerBag: 0 },
+  { id: "finisher", name: "Finisher", bags: 0, kgPerBag: 25, pricePerBag: 0 }
+];
+const DEFAULT_SALES: SaleItem[] = [{ id: "sale-1", weightKg: 0, pricePerKg: 0 }];
+
+interface FatteningClientProps {
+  next?: string | null;
+}
+
+export default function FatteningClient({ next }: FatteningClientProps) {
+  const [ledger, setLedger] = useState(true);
+  const [heads, setHeads] = useState(12);
+  const [feeds, setFeeds] = useState([...DEFAULT_FEEDS]);
+  const [sales, setSales] = useState([...DEFAULT_SALES]);
+  const summary = computeFattening(feeds, sales, heads);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("pig-ledger-fattening-v1");
+      if (raw) {
+        const saved = JSON.parse(raw) as { heads?: number; feeds?: FeedItem[]; sales?: SaleItem[] };
+        if (typeof saved.heads === "number") setHeads(Math.max(1, Math.floor(num(saved.heads))));
+        if (Array.isArray(saved.feeds)) setFeeds(saved.feeds);
+        if (Array.isArray(saved.sales)) setSales(saved.sales);
+      }
+    } catch {
+      window.localStorage.removeItem("pig-ledger-fattening-v1");
+    }
+    setLedger(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ledger) return;
+    try {
+      window.localStorage.setItem("pig-ledger-fattening-v1", JSON.stringify({ heads, feeds, sales }));
+    } catch {
+      return;
+    }
+  }, [ledger, feeds, sales, heads]);
+
+  if (!ledger) return <div className="card text-center">Loading…</div>;
+
+  const updateFeed = (idx: number, field: string, value: any) =>
+    setFeeds(prev => { const newFeeds = [...prev]; newFeeds[idx] = { ...newFeeds[idx], [field]: value }; return newFeeds; });
+
+  const updateSale = (idx: number, field: string, value: any) =>
+    setSales(prev => { const newSales = [...prev]; newSales[idx] = { ...newSales[idx], [field]: value }; return newSales; });
+
+  return (
+    <div className="space-y-4">
+      <p>Heads: <input type="number" value={heads} onChange={(e) => setHeads(num(e.target.value))} inputMode="numeric" min="1" step="1" className="input" /></p>
+      <p>Total Feed Cost: {fmt(summary.totalFeedCost)} ({fmtKg(summary.totalFeedKg)} kg)</p>
+      <p>Total Sales: {fmt(summary.totalSales)}</p>
+      <p>Net Profit: {fmt(summary.netProfit)}</p>
+      <p className="profit-per-head">
+        Profit per Head: {summary.profitPerHead === null ? '—' : fmt(summary.profitPerHead)} / head
+      </p>
+
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-200">
+            <th className="text-left p-2 font-semibold text-slate-500">Feed</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Bags</th>
+            <th className="text-center p-2 font-semibold text-slate-500">kg/bag</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Price/bag (₱)</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Amount (₱)</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Total kg</th>
+          </tr>
+        </thead>
+        <tbody>
+          {feeds.map((f, i) => (
+            <tr key={f.id} className="border-b border-slate-200">
+              <td className="p-2">{f.name}</td>
+              <td className="text-center p-2"><input type="number" value={f.bags} onChange={(e) => updateFeed(i, 'bags', num(e.target.value))} inputMode="numeric" min="0" step="1" className="input w-full" /></td>
+              <td className="text-center p-2"><input type="number" value={f.kgPerBag} onChange={(e) => updateFeed(i, 'kgPerBag', num(e.target.value))} inputMode="decimal" min="0" step="any" className="input w-full" /></td>
+              <td className="text-center p-2"><input type="number" value={f.pricePerBag} onChange={(e) => updateFeed(i, 'pricePerBag', num(e.target.value))} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td>
+              <td className="text-center p-2">{fmt(round2(f.bags * f.pricePerBag))}</td>
+              <td className="text-center p-2">{fmtKg(round2(f.bags * f.kgPerBag))}</td>
+            </tr>
+          ))}
+          <tr className="border-b border-slate-200"><td colSpan={6} className="p-2 text-slate-400">Enter feed details above</td></tr>
+        </tbody>
+      </table>
+
+      <table className="w-full text-sm mt-4">
+        <thead>
+          <tr className="border-b border-slate-200">
+            <th className="text-left p-2 font-semibold text-slate-500">Description</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Weight (kg)</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Price / kg (₱)</th>
+            <th className="text-center p-2 font-semibold text-slate-500">Amount (₱)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sales.map((s, i) => (
+            <tr key={s.id} className="border-b border-slate-200">
+              <td className="p-2">{s.id}</td>
+              <td className="text-center p-2"><input type="number" value={s.weightKg} onChange={(e) => updateSale(i, 'weightKg', num(e.target.value))} inputMode="decimal" min="0" step="any" className="input w-full" /></td>
+              <td className="text-center p-2"><input type="number" value={s.pricePerKg} onChange={(e) => updateSale(i, 'pricePerKg', num(e.target.value))} inputMode="decimal" min="0" step="0.01" className="input w-full" /></td>
+              <td className="text-center p-2">{fmt(round2(s.weightKg * s.pricePerKg))}</td>
+            </tr>
+          ))}
+          <tr className="border-b border-slate-200"><td colSpan={4} className="p-2 text-slate-400">Enter sale details above</td></tr>
+        </tbody>
+      </table>
+
+      <p>Net Profit: {fmt(summary.netProfit)}</p>
+      <p className="profit-per-head">
+        Profit per Head: {summary.profitPerHead === null ? '—' : fmt(summary.profitPerHead)} / head
+      </p>
+    </div>
+  );
+}

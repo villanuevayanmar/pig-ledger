@@ -1,0 +1,23 @@
+node_modules
+.next
+out
+.env.local
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+# local debug/test logs — never deploy these
+*.log
+*.txt
+_conntest.mjs
+_mathtest.mjs
+_offlinetest.mjs
+_categorytest.mjs
+build*.log
+install*.log
+swc*.log
+ssr*.log
+# github web-upload helper lists (local only)
+UPLOAD_TO_GITHUB/
+UPLOAD_LIST.txt
+DO_NOT_UPLOAD.txt
+
