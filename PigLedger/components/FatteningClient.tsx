@@ -5,6 +5,10 @@ import { fmt, fmtKg, num, round2 } from '@/lib/format';
 import { computeFattening } from '@/lib/totals';
 import { loadLocalLedger, saveLocalLedger } from '@/lib/local-store';
 
+interface FatteningClientProps {
+  next?: string | null;
+}
+
 const DEFAULT_FEEDS = [
   { id: 'f1', name: 'Booster Pellets', bags: 10, kgPerBag: 90, pricePerBag: 130 },
   { id: 'f2', name: 'PPSP', bags: 13, kgPerBag: 1340, pricePerBag: 130 },
@@ -18,7 +22,7 @@ const DEFAULT_SALES = [
   { id: 's2', weightKg: 630, pricePerKg: 130 }
 ];
 
-export default function FatteningClient() {
+export default function FatteningClient({ next }: FatteningClientProps) {
   const [ledger, setLedger] = useState(null);
   const [heads, setHeads] = useState(12);
   const [feeds, setFeeds] = useState([...DEFAULT_FEEDS]);
