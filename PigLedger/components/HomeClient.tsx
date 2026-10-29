@@ -19,93 +19,60 @@ export default function HomeClient() {
   }, []);
 
   if (!ledger) {
-    return (
-      <div className="card text-center">
-        <p className="muted">Loading financial summary…</p>
-      </div>
-    );
+    return <div className="card text-center"><p className="muted">Loading financial summary…</p></div>;
   }
 
   const totals = computeTotals(ledger.expenses, ledger.sales, ledger.farm.pigCount);
+  const activity = [
+    ...ledger.expenses.map((item) => ({ id: item.id, date: item.date, label: item.description || item.category, type: 'Expense', amount: item.lineTotal })),
+    ...ledger.sales.map((item) => ({ id: item.id, date: item.date, label: item.buyer || 'Pig sale', type: 'Sale', amount: item.gross }))
+  ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
 
   return (
     <div className="space-y-4">
-      <SyncStatus
-        pending={ledger.pending.length}
-        onSync={async () => {
-          setLedger(await syncLedgerNow());
-        }}
-      />
+      <SyncStatus pending={ledger.pending.length} onSync={async () => setLedger(await syncLedgerNow())} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900">{ledger.farm.name}</h2>
-          <p className="muted">
-            {ledger.farm.pigCount > 0
-              ? `${ledger.farm.pigCount} head registered`
-              : 'Configure herd size in Settings to enable per-head profit metrics.'}
-          </p>
+          <p className="muted">{ledger.farm.pigCount > 0 ? `${ledger.farm.pigCount} head registered` : 'Configure herd size in Settings to enable per-head profit metrics.'}</p>
         </div>
-        <span className="pill">
-          {ledger.expenses.length} expense entries · {ledger.sales.length} sales entries
-        </span>
+        <span className="pill">{ledger.expenses.length} expenses · {ledger.sales.length} sales · {ledger.batches.length} batches</span>
       </div>
 
       {totals.issueCount > 0 ? (
-        <Link
-          href="/expenses"
-          className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700"
-        >
+        <Link href="/transactions" className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
           <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            {totals.issueCount} expense record{totals.issueCount > 1 ? 's require' : ' requires'}{' '}
-            review — line total does not equal quantity × unit price. Select to resolve.
-          </span>
+          <span>{totals.issueCount} expense record{totals.issueCount > 1 ? 's require' : ' requires'} review because its line total differs from quantity × unit price.</span>
         </Link>
       ) : null}
 
       <SummaryCards totals={totals} />
 
-      <details className="card" open={ledger.expenses.length + ledger.sales.length <= 3}>
-        <summary className="cursor-pointer text-sm font-semibold tracking-tight text-slate-900">
-          Additional financial metrics
-        </summary>
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          {[
-            { label: 'Operating Expenses', value: fmt(totals.totalExpenses), tone: 'text-rose-700' },
-            { label: 'Total Revenue', value: fmt(totals.grossSales), tone: 'text-slate-900' },
-            { label: 'Weight Sold', value: fmtKg(totals.totalWeight), tone: 'text-slate-900' },
-            { label: 'Head Sold', value: String(totals.totalHeads), tone: 'text-slate-900' },
-            {
-              label: 'Net Profit',
-              value: fmt(totals.netIncome),
-              tone: totals.netIncome < 0 ? 'text-rose-700' : 'text-emerald-700'
-            },
-            {
-              label: 'Net Profit / Head',
-              value: totals.profitPerPig === null ? '—' : fmt(totals.profitPerPig),
-              tone: 'text-slate-900'
-            }
-          ].map((m) => (
-            <div key={m.label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                {m.label}
-              </p>
-              <p className={'mt-0.5 text-sm font-bold tabular-nums ' + m.tone}>{m.value}</p>
-            </div>
-          ))}
+      <section className="card space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Recent activity</h3>
+          <Link href="/reports" className="text-xs font-semibold text-slate-600 hover:text-slate-900">View reports</Link>
         </div>
-      </details>
+        {activity.length ? activity.map((item) => (
+          <div key={item.type + item.id} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+            <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{item.label}</p><p className="text-xs text-slate-500">{item.date} · {item.type}</p></div>
+            <strong className={'whitespace-nowrap text-sm tabular-nums ' + (item.type === 'Expense' ? 'text-rose-700' : 'text-emerald-700')}>{item.type === 'Expense' ? '−' : '+'}{fmt(item.amount)}</strong>
+          </div>
+        )) : <p className="muted">Your purchases and sales will appear here after you record the first transaction.</p>}
+      </section>
+
+      <section className="card space-y-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">At a glance</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg bg-slate-50 px-3 py-3"><p className="text-xs text-slate-500">Weight sold</p><p className="mt-1 text-lg font-bold">{fmtKg(totals.totalWeight)}</p></div>
+          <div className="rounded-lg bg-slate-50 px-3 py-3"><p className="text-xs text-slate-500">Pigs sold</p><p className="mt-1 text-lg font-bold">{totals.totalHeads}</p></div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-2 gap-3">
-        <Link href="/expenses" className="btn-primary">
-          <Icon name="plus" className="h-4 w-4" />
-          Record Expense
-        </Link>
-        <Link href="/sales" className="btn-blue">
-          <Icon name="plus" className="h-4 w-4" />
-          Record Sale
-        </Link>
+        <Link href="/transactions" className="btn-primary"><Icon name="plus" className="h-4 w-4" />Record transaction</Link>
+        <Link href="/batches" className="btn-blue"><Icon name="building" className="h-4 w-4" />View batches</Link>
       </div>
     </div>
   );

@@ -14,8 +14,8 @@ import {
   type LocalLedger,
   type PendingOp
 } from '@/lib/local-store';
-import { CATEGORIES, UNITS } from '@/lib/types';
-import type { Expense } from '@/lib/types';
+import { CATEGORIES, FEED_CATEGORIES, UNITS } from '@/lib/types';
+import type { Batch, Expense } from '@/lib/types';
 
 export async function pullServerLedger() {
   const sb = createBrowserClientApp();
@@ -55,18 +55,38 @@ export async function pullServerLedger() {
     pigCount: Math.round(num(f.pig_count)),
     startDate: f.start_date || ''
   };
-  const { data: eRows } = await sb
+  const { data: bRows, error: batchReadError } = await sb
+    .from('batches')
+    .select('id, farm_id, name, start_date, target_sale_date, initial_heads, status, projection, created_at')
+    .eq('farm_id', farm.id)
+    .eq('user_id', uid)
+    .order('start_date', { ascending: false });
+  if (batchReadError) throw new Error('Could not refresh batches.');
+  const batches: Batch[] = ((bRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    id: String(r.id),
+    farmId: String(r.farm_id),
+    name: String(r.name ?? 'Batch'),
+    startDate: String(r.start_date ?? ''),
+    targetSaleDate: r.target_sale_date ? String(r.target_sale_date) : null,
+    initialHeads: Math.max(0, Math.round(num(r.initial_heads))),
+    status: String(r.status ?? 'active') as Batch['status'],
+    projection: (r.projection && typeof r.projection === 'object' ? r.projection : {}) as Batch['projection'],
+    createdAt: String(r.created_at ?? '')
+  }));
+  const { data: eRows, error: expenseReadError } = await sb
     .from('expenses')
-    .select('id, date, category, description, qty, unit, price, line_total')
+    .select('id, date, category, description, qty, unit, price, line_total, batch_id, expense_type, item_name')
     .eq('farm_id', farm.id)
     .eq('user_id', uid)
     .order('date', { ascending: false });
-  const { data: sRows } = await sb
+  if (expenseReadError) throw new Error('Could not refresh expenses.');
+  const { data: sRows, error: salesReadError } = await sb
     .from('sales')
-    .select('id, date, buyer, heads, weight_kg, price_per_kg, gross')
+    .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id')
     .eq('farm_id', farm.id)
     .eq('user_id', uid)
     .order('date', { ascending: false });
+  if (salesReadError) throw new Error('Could not refresh sales.');
   const expenses: Expense[] = ((eRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
     id: String(r.id),
     date: String(r.date ?? ''),
@@ -75,7 +95,10 @@ export async function pullServerLedger() {
     qty: num(r.qty),
     unit: String(r.unit ?? 'Sack'),
     price: num(r.price),
-    lineTotal: num(r.line_total)
+    lineTotal: num(r.line_total),
+    batchId: r.batch_id ? String(r.batch_id) : null,
+    expenseType: String(r.expense_type ?? ''),
+    itemName: String(r.item_name ?? r.description ?? '')
   }));
   const sales = ((sRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
     id: String(r.id),
@@ -84,9 +107,10 @@ export async function pullServerLedger() {
     heads: Math.round(num(r.heads)),
     weightKg: num(r.weight_kg),
     pricePerKg: num(r.price_per_kg),
-    gross: num(r.gross)
+    gross: num(r.gross),
+    batchId: r.batch_id ? String(r.batch_id) : null
   }));
-  return replaceLocalWithServer(farm, expenses, sales);
+  return replaceLocalWithServer(farm, expenses, sales, batches);
 }
 
 /** Push queue to /api/sync, then pull the fresh server copy. */
@@ -101,8 +125,11 @@ export async function syncLedgerNow(): Promise<LocalLedger> {
       });
       const json = await res.json();
       if (json?.ok) {
-        local.pending = [];
-        await saveLocalLedger(local);
+        const completed = Number.isInteger(json.completedOps) ? Math.max(0, Math.min(local.pending.length, json.completedOps)) : local.pending.length;
+        if (completed > 0) {
+          local.pending = local.pending.slice(completed);
+          await saveLocalLedger(local);
+        }
       }
     } catch {
       return local; // still offline — keep queue
@@ -121,6 +148,8 @@ export default function ExpensesClient() {
   const [ledger, setLedger] = useState<LocalLedger | null>(null);
   const [qty, setQty] = useState('');
   const [price, setPrice] = useState('');
+  const [category, setCategory] = useState('Booster');
+  const [expenseType, setExpenseType] = useState('feed');
 
   useEffect(() => {
     loadLocalLedger().then(setLedger);
@@ -130,15 +159,21 @@ export default function ExpensesClient() {
   async function handleAdd(formData: FormData) {
     const q = num(formData.get('qty'));
     const p = num(formData.get('price'));
+    const category = String(formData.get('category') || 'Booster');
+    const description = String(formData.get('description') || '');
+    const expenseType = String(formData.get('expenseType') || (FEED_CATEGORIES.some((item) => item === category) ? 'feed' : 'other'));
     const expense: Expense = {
       id: makeLocalId('local-exp'),
       date: String(formData.get('date') || today()),
-      category: String(formData.get('category') || 'Booster'),
-      description: String(formData.get('description') || ''),
+      category,
+      description,
       qty: q,
       unit: String(formData.get('unit') || 'Sack'),
       price: p,
-      lineTotal: round2(q * p)
+      lineTotal: round2(q * p),
+      batchId: String(formData.get('batchId') || '') || null,
+      expenseType,
+      itemName: description
     };
     const local = await loadLocalLedger();
     const op: PendingOp = { kind: 'add-expense', expense };
@@ -148,6 +183,8 @@ export default function ExpensesClient() {
     setLedger({ ...local });
     setQty('');
     setPrice('');
+    setCategory('Booster');
+    setExpenseType('feed');
     syncLedgerNow().then(setLedger).catch(() => {});
   }
 
@@ -207,7 +244,11 @@ export default function ExpensesClient() {
           </label>
           <label className="col-span-1">
             <span className="label">Feed Stage / Item Category</span>
-            <select name="category" className="input" defaultValue="Booster">
+            <select name="category" className="input" value={category} onChange={(event) => {
+              const value = event.target.value;
+              setCategory(value);
+              setExpenseType(FEED_CATEGORIES.some((item) => item === value) ? 'feed' : 'other');
+            }}>
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
@@ -215,6 +256,10 @@ export default function ExpensesClient() {
           </label>
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <label><span className="label">Expense type</span><select name="expenseType" className="input" value={expenseType} onChange={(event) => setExpenseType(event.target.value)}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="labor">Labor</option><option value="utilities">Utilities</option><option value="other">Other</option></select></label>
+          <label><span className="label">Assign to batch (optional)</span><select name="batchId" className="input" defaultValue=""><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
+        </div>
         <label className="block">
           <span className="label">Description</span>
           <input type="text" name="description" className="input" placeholder="e.g. 5 sacks pre-starter feed" required />

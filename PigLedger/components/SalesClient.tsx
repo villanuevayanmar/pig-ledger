@@ -35,7 +35,8 @@ export default function SalesClient() {
       heads: Math.round(num(formData.get('heads'))),
       weightKg: w,
       pricePerKg: p,
-      gross: round2(w * p)
+      gross: round2(w * p),
+      batchId: String(formData.get('batchId') || '') || null
     };
     const local = await loadLocalLedger();
     const op: PendingOp = { kind: 'add-sale', sale };
@@ -96,6 +97,7 @@ export default function SalesClient() {
             <input type="text" name="buyer" className="input" placeholder="e.g. Mang Roger" />
           </label>
         </div>
+        <label className="block"><span className="label">Assign to batch (optional)</span><select name="batchId" className="input" defaultValue=""><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
         <div className="grid grid-cols-2 gap-3">
           <label>
             <span className="label">Number of Heads</span>

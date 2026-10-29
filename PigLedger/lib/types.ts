@@ -14,29 +14,51 @@ export const CATEGORIES = [
 ] as const;
 
 export const UNITS = ['Sack', 'Kg', 'Head', 'Liter', 'Pack', 'Piece'] as const;
+export const FEED_CATEGORIES = ['Booster', 'Pre-Starter', 'Starter', 'Grower', 'Finisher', 'Gestating', 'Lactating', 'Other Feed'] as const;
 
-// --- Fattening computation types ---
+export type BatchStatus = 'active' | 'completed' | 'archived';
+
+export type BatchProjection = {
+  plannedHeads: number;
+  expectedAvgSaleWeightKg: number;
+  expectedPricePerKg: number;
+  pigletPricePerHead: number;
+  projectedFeedCost: number;
+  projectedOtherCosts: number;
+};
+
+export type Batch = {
+  id: string;
+  farmId: string;
+  name: string;
+  startDate: string;
+  targetSaleDate?: string | null;
+  initialHeads: number;
+  status: BatchStatus;
+  projection: BatchProjection;
+  createdAt: string;
+};
 
 export type FatteningFeed = {
-  name: string;        // e.g. 'Booster Pellets'
-  bags: number;        // number of bags
-  kgPerBag: number;    // kg per bag
-  pricePerBag: number; // price per bag (₱)
+  name: string;
+  bags: number;
+  kgPerBag: number;
+  pricePerBag: number;
 };
 
 export type FatteningSale = {
-  weightKg: number;    // kg sold in this row
-  pricePerKg: number;  // ₱ per kg
-  gross: number;       // weightKg × pricePerKg
+  weightKg: number;
+  pricePerKg: number;
+  gross: number;
 };
 
 export type FatteningSummary = {
-  totalFeedCost: number;        // sum of all feed amounts (₱)
-  totalFeedKg: number;          // sum of all feed weights (kg)
-  totalSales: number;           // sum of sales amounts (₱)
-  totalCost: number;            // feeds + piglets + medication + electricity (₱)
-  netProfit: number;            // totalSales - totalCost (₱)
-  profitPerHead: number | null; // netProfit / heads (₱)
+  totalFeedCost: number;
+  totalFeedKg: number;
+  totalSales: number;
+  totalCost: number;
+  netProfit: number;
+  profitPerHead: number | null;
 };
 
 export type Expense = {
@@ -48,6 +70,9 @@ export type Expense = {
   unit: string;
   price: number;
   lineTotal: number;
+  batchId?: string | null;
+  expenseType?: string;
+  itemName?: string;
 };
 
 export type Sale = {
@@ -58,6 +83,7 @@ export type Sale = {
   weightKg: number;
   pricePerKg: number;
   gross: number;
+  batchId?: string | null;
 };
 
 export type Farm = {
@@ -79,9 +105,7 @@ export type Totals = {
   costPerPig: number | null;
   costPerKg: number | null;
   categories: CategoryTotal[];
-  /** expense id -> expected line total (qty x price) when they don't match */
   discrepancies: Record<string, number>;
-  /** sale id -> net revenue after its share of expenses */
   netBySale: Record<string, number>;
   issueCount: number;
 };

@@ -1,20 +1,17 @@
-// ============================================================
-// Offline-first layer for Pig Farm Ledger.
-// Phone keeps its own copy (IndexedDB) so the app works with NO signal.
-// When internet returns, queued rows sync to Supabase.
-// Last-write-wins: a synced row simply exists in both places.
-// ============================================================
-import type { Expense, Farm, Sale } from './types';
+import type { Batch, Expense, Farm, Sale } from './types';
 
 export type PendingOp =
   | { kind: 'add-expense'; expense: Expense }
   | { kind: 'delete-expense'; id: string }
   | { kind: 'add-sale'; sale: Sale }
   | { kind: 'delete-sale'; id: string }
+  | { kind: 'add-batch'; batch: Batch }
+  | { kind: 'update-batch'; batch: Batch }
   | { kind: 'update-farm'; farm: Farm };
 
 export type LocalLedger = {
   farm: Farm;
+  batches: Batch[];
   expenses: Expense[];
   sales: Sale[];
   pending: PendingOp[];
@@ -30,7 +27,14 @@ function defaultFarm(): Farm {
 }
 
 export function defaultLedger(): LocalLedger {
-  return { farm: defaultFarm(), expenses: [], sales: [], pending: [], updatedAt: new Date().toISOString() };
+  return {
+    farm: defaultFarm(),
+    batches: [],
+    expenses: [],
+    sales: [],
+    pending: [],
+    updatedAt: new Date().toISOString()
+  };
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -80,13 +84,13 @@ async function idbSet(ledger: LocalLedger): Promise<void> {
   });
 }
 
-/** Load local copy (offline-safe). Falls back to defaults when empty. */
 export async function loadLocalLedger(): Promise<LocalLedger> {
   try {
     const saved = await idbGet();
     if (saved && typeof saved === 'object') {
       return {
         farm: saved.farm ?? defaultFarm(),
+        batches: Array.isArray(saved.batches) ? saved.batches : [],
         expenses: Array.isArray(saved.expenses) ? saved.expenses : [],
         sales: Array.isArray(saved.sales) ? saved.sales : [],
         pending: Array.isArray(saved.pending) ? saved.pending : [],
@@ -94,7 +98,7 @@ export async function loadLocalLedger(): Promise<LocalLedger> {
       };
     }
   } catch {
-    // IndexedDB unavailable (private mode etc.) — use memory only.
+    // IndexedDB can be unavailable in private browsing modes.
   }
   return defaultLedger();
 }
@@ -103,18 +107,45 @@ export async function saveLocalLedger(ledger: LocalLedger): Promise<void> {
   try {
     await idbSet(ledger);
   } catch {
-    // Ignore — app still works in memory for this session.
+    // Keep the current session usable even if local persistence is unavailable.
   }
 }
 
-/** Replace local rows with the server (online) copy, keeping unsynced queue. */
 export async function replaceLocalWithServer(
   farm: Farm,
   expenses: Expense[],
-  sales: Sale[]
+  sales: Sale[],
+  batches: Batch[] = []
 ): Promise<LocalLedger> {
   const local = await loadLocalLedger();
-  const next: LocalLedger = { farm, expenses, sales, pending: local.pending, updatedAt: new Date().toISOString() };
+  const pendingBatches = local.pending
+    .filter((op) => op.kind === 'add-batch' || op.kind === 'update-batch')
+    .map((op) => op.batch);
+  const pendingExpenseIds = new Set(
+    local.pending.filter((op) => op.kind === 'add-expense').map((op) => op.expense.id)
+  );
+  const pendingSaleIds = new Set(
+    local.pending.filter((op) => op.kind === 'add-sale').map((op) => op.sale.id)
+  );
+  const mergedBatches = batches.map((batch) => pendingBatches.find((item) => item.id === batch.id) ?? batch);
+  for (const batch of local.batches) {
+    if (!mergedBatches.some((item) => item.id === batch.id)) mergedBatches.push(batch);
+  }
+  const mergedExpenses = [...expenses];
+  for (const expense of local.expenses) {
+    if (pendingExpenseIds.has(expense.id) && !mergedExpenses.some((item) => item.id === expense.id)) mergedExpenses.unshift(expense);
+  }
+  const mergedSales = [...sales];
+  for (const sale of local.sales) {
+    if (pendingSaleIds.has(sale.id) && !mergedSales.some((item) => item.id === sale.id)) mergedSales.unshift(sale);
+  }  const next: LocalLedger = {
+    farm,
+    batches: mergedBatches,
+    expenses,
+    sales,
+    pending: local.pending,
+    updatedAt: new Date().toISOString()
+  };
   await saveLocalLedger(next);
   return next;
 }
