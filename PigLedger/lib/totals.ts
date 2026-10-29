@@ -1,10 +1,7 @@
 import { round2 } from './format';
 import type { CategoryTotal, Expense, Sale, Totals } from './types';
 
-/**
- * Single source of truth for every number shown in the app.
- * Feed it raw ledger rows + pig count, get every total back.
- */
+
 export function computeTotals(expenses: Expense[], sales: Sale[], pigCount: number): Totals {
   const totalExpenses = round2(expenses.reduce((sum, e) => sum + e.lineTotal, 0));
   const totalWeight = round2(sales.reduce((sum, s) => sum + s.weightKg, 0));
@@ -58,4 +55,51 @@ export function computeTotals(expenses: Expense[], sales: Sale[], pigCount: numb
     netBySale,
     issueCount: Object.keys(discrepancies).length
   };
+}
+
+/** Compute the fattening sheet summary from feeds + sales + head count. */
+export function computeFattening(
+  feeds: { name: string; bags: number; kgPerBag: number; pricePerBag: number }[],
+  sales: { weightKg: number; pricePerKg: number }[],
+  heads: number
+): {
+  totalFeedCost: number;
+  totalFeedKg: number;
+  totalSales: number;
+  totalCost: number;
+  netProfit: number;
+  profitPerHead: number | null;
+} {
+  // --- Feed breakdown ---
+  let totalFeedCost = 0;
+  let totalFeedKg = 0;
+  for (const f of feeds) {
+    const bags = num(f.bags);
+    const kgPerBag = num(f.kgPerBag);
+    const pricePerBag = num(f.pricePerBag);
+    const amount = round2(bags * pricePerBag);
+    const kg = round2(bags * kgPerBag);
+    totalFeedCost += amount;
+    totalFeedKg += kg;
+  }
+
+  // --- Sales ---
+  let totalSales = 0;
+  for (const s of sales) {
+    const weightKg = num(s.weightKg);
+    const pricePerKg = num(s.pricePerKg);
+    totalSales += round2(weightKg * pricePerKg);
+  }
+
+  // --- Costs ---
+  const pigletCost = round2(num(heads) * 4000);      // ₱4,000 per head
+  const medication = 3600;
+  const electricity = 3000;
+  const totalCost = round2(totalFeedCost + pigletCost + medication + electricity);
+
+  // --- Profit ---
+  const netProfit = round2(totalSales - totalCost);
+  const profitPerHead = num(heads) > 0 ? round2(netProfit / num(heads)) : null;
+
+  return { totalFeedCost, totalFeedKg, totalSales, totalCost, netProfit, profitPerHead };
 }

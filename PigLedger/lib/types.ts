@@ -15,6 +15,30 @@ export const CATEGORIES = [
 
 export const UNITS = ['Sack', 'Kg', 'Head', 'Liter', 'Pack', 'Piece'] as const;
 
+// --- Fattening computation types ---
+
+export type FatteningFeed = {
+  name: string;        // e.g. 'Booster Pellets'
+  bags: number;        // number of bags
+  kgPerBag: number;    // kg per bag
+  pricePerBag: number; // price per bag (₱)
+};
+
+export type FatteningSale = {
+  weightKg: number;    // kg sold in this row
+  pricePerKg: number;  // ₱ per kg
+  gross: number;       // weightKg × pricePerKg
+};
+
+export type FatteningSummary = {
+  totalFeedCost: number;        // sum of all feed amounts (₱)
+  totalFeedKg: number;          // sum of all feed weights (kg)
+  totalSales: number;           // sum of sales amounts (₱)
+  totalCost: number;            // feeds + piglets + medication + electricity (₱)
+  netProfit: number;            // totalSales - totalCost (₱)
+  profitPerHead: number | null; // netProfit / heads (₱)
+};
+
 export type Expense = {
   id: string;
   date: string;
