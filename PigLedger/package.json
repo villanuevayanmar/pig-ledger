@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run test:unit && next build",
     "start": "next start",
     "test:offline": "node _offlinetest.mjs",
     "test:categories": "node _categorytest.mjs",
