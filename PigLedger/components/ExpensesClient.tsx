@@ -57,9 +57,11 @@ export async function pullServerLedger() {
   };
   const { data: bRows, error: batchReadError } = await sb
     .from('batches')
-    .select('id, farm_id, name, start_date, target_sale_date, initial_heads, status, projection, created_at')
+    .select('id, farm_id, name, start_date, target_sale_date, initial_heads, status, projection, created_at, deleted_at')
     .eq('farm_id', farm.id)
     .eq('user_id', uid)
+    .is('deleted_at', null)
+    .neq('status', 'archived')
     .order('start_date', { ascending: false });
   if (batchReadError) throw new Error('Could not refresh batches.');
   const batches: Batch[] = ((bRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
@@ -75,7 +77,7 @@ export async function pullServerLedger() {
   }));
   const { data: eRows, error: expenseReadError } = await sb
     .from('expenses')
-    .select('id, date, category, description, qty, unit, price, line_total, batch_id, expense_type, item_name')
+    .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name')
     .eq('farm_id', farm.id)
     .eq('user_id', uid)
     .order('date', { ascending: false });
@@ -95,6 +97,7 @@ export async function pullServerLedger() {
     qty: num(r.qty),
     unit: String(r.unit ?? 'Sack'),
     price: num(r.price),
+    kgPerUnit: num(r.kg_per_unit),
     lineTotal: num(r.line_total),
     batchId: r.batch_id ? String(r.batch_id) : null,
     expenseType: String(r.expense_type ?? ''),
@@ -170,6 +173,7 @@ export default function ExpensesClient() {
       qty: q,
       unit: String(formData.get('unit') || 'Sack'),
       price: p,
+      kgPerUnit: Math.max(0, num(formData.get('kgPerUnit'))),
       lineTotal: round2(q * p),
       batchId: String(formData.get('batchId') || '') || null,
       expenseType,
@@ -257,7 +261,7 @@ export default function ExpensesClient() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <label><span className="label">Expense type</span><select name="expenseType" className="input" value={expenseType} onChange={(event) => setExpenseType(event.target.value)}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="labor">Labor</option><option value="utilities">Utilities</option><option value="other">Other</option></select></label>
+          <label><span className="label">Expense type</span><select name="expenseType" className="input" value={expenseType} onChange={(event) => setExpenseType(event.target.value)}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="electricity">Electricity</option><option value="labor">Labor</option><option value="utilities">Utilities</option><option value="other">Other</option></select></label>
           <label><span className="label">Assign to batch (optional)</span><select name="batchId" className="input" defaultValue=""><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
         </div>
         <label className="block">
@@ -279,6 +283,7 @@ export default function ExpensesClient() {
           </label>
         </div>
 
+        {expenseType === 'feed' ? <label className="block"><span className="label">Kilograms per unit (e.g. kg per sack)</span><input type="number" name="kgPerUnit" className="input" inputMode="decimal" min="0" step="any" placeholder="e.g. 50" /></label> : <input type="hidden" name="kgPerUnit" value="0" />}
         <label className="block">
           <span className="label">Unit Price (₱)</span>
           <input type="number" name="price" className="input" inputMode="decimal" min="0" step="0.01" placeholder="e.g. 1500" value={price} onChange={(e) => setPrice(e.target.value)} required />

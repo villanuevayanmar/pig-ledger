@@ -99,6 +99,7 @@ export async function POST(req: Request) {
           qty,
           unit: expense.unit || 'Sack',
           price,
+          kg_per_unit: Math.max(0, num(expense.kgPerUnit)),
           line_total: round2(qty * price)
         });
         error = result.error;

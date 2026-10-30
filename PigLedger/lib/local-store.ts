@@ -90,7 +90,7 @@ export async function loadLocalLedger(): Promise<LocalLedger> {
     if (saved && typeof saved === 'object') {
       return {
         farm: saved.farm ?? defaultFarm(),
-        batches: Array.isArray(saved.batches) ? saved.batches : [],
+        batches: Array.isArray(saved.batches) ? saved.batches.filter((batch) => batch.status !== 'archived') : [],
         expenses: Array.isArray(saved.expenses) ? saved.expenses : [],
         sales: Array.isArray(saved.sales) ? saved.sales : [],
         pending: Array.isArray(saved.pending) ? saved.pending : [],
@@ -127,9 +127,11 @@ export async function replaceLocalWithServer(
   const pendingSaleIds = new Set(
     local.pending.filter((op) => op.kind === 'add-sale').map((op) => op.sale.id)
   );
-  const mergedBatches = batches.map((batch) => pendingBatches.find((item) => item.id === batch.id) ?? batch);
-  for (const batch of local.batches) {
-    if (!mergedBatches.some((item) => item.id === batch.id)) mergedBatches.push(batch);
+  const mergedBatches = batches
+    .filter((batch) => batch.status !== 'archived')
+    .map((batch) => pendingBatches.find((item) => item.id === batch.id) ?? batch);
+  for (const batch of pendingBatches) {
+    if (batch.status !== 'archived' && !mergedBatches.some((item) => item.id === batch.id)) mergedBatches.unshift(batch);
   }
   const mergedExpenses = [...expenses];
   for (const expense of local.expenses) {
@@ -138,11 +140,12 @@ export async function replaceLocalWithServer(
   const mergedSales = [...sales];
   for (const sale of local.sales) {
     if (pendingSaleIds.has(sale.id) && !mergedSales.some((item) => item.id === sale.id)) mergedSales.unshift(sale);
-  }  const next: LocalLedger = {
+  }
+  const next: LocalLedger = {
     farm,
     batches: mergedBatches,
-    expenses,
-    sales,
+    expenses: mergedExpenses,
+    sales: mergedSales,
     pending: local.pending,
     updatedAt: new Date().toISOString()
   };

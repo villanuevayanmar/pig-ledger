@@ -73,6 +73,7 @@ export type Expense = {
   batchId?: string | null;
   expenseType?: string;
   itemName?: string;
+  kgPerUnit?: number;
 };
 
 export type Sale = {

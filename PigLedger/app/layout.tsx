@@ -5,6 +5,7 @@ import UserMenu from '@/components/UserMenu';
 import InstallPrompt from '@/components/InstallPrompt';
 import SwRegister from '@/components/SwRegister';
 import Icon from '@/components/Icon';
+import OnboardingTutorial from '@/components/OnboardingTutorial';
 import { createClient, supabaseConfigured } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
@@ -58,6 +59,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <main className="mx-auto w-full max-w-3xl space-y-4 px-4 pb-32 pt-4">
           <SwRegister />
           <InstallPrompt />
+          <OnboardingTutorial />
           {children}
         </main>
 
