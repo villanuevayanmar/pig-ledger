@@ -301,7 +301,19 @@ let syncInFlight: Promise<LocalLedger> | null = null;
 
 async function performSyncLedgerNow(): Promise<LocalLedger> {
   let local = await loadLocalLedger();
-  if (local.pending.length > 0) {
+
+  // Bind first-use offline data to the explicitly selected/available farm
+  // before sending any queued records. Never guess a user's first farm.
+  if (local.farm.id === 'local-farm') {
+    try {
+      const scoped = await pullServerLedger();
+      if (scoped) local = scoped;
+    } catch {
+      // Stay local-only; do not sync to an arbitrary farm while disconnected.
+    }
+  }
+
+  if (local.pending.length > 0 && local.farm.id !== 'local-farm') {
     try {
       const res = await fetch('/api/sync', {
         method: 'POST',
