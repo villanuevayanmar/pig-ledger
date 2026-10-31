@@ -27,7 +27,6 @@ export default function SyncStatus({
 }) {
   const [online, setOnline] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
 
   const doSync = useCallback(async () => {
     if (syncing) return;
@@ -35,7 +34,6 @@ export default function SyncStatus({
     setSyncing(true);
     try {
       await onSync();
-      if (pending === 0) setLastSync(new Date().toLocaleTimeString());
     } finally {
       setSyncing(false);
     }
@@ -86,7 +84,7 @@ export default function SyncStatus({
         'flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition ' +
         (pending > 0
           ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100'
-          : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100')
+          : syncError ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100')
       }
     >
       <Icon name={syncing || pending > 0 ? 'sync' : 'check'} className="h-4 w-4" />
@@ -94,7 +92,7 @@ export default function SyncStatus({
         ? 'Synchronizing…'
         : pending > 0
           ? `Online — ${pending} entr${pending > 1 ? 'ies' : 'y'} pending synchronization`
-          : `Online — all records synchronized${lastSync ? ' · ' + lastSync : ''}`}
+          : 'Online — no pending records'}
     </button>
     {syncError ? <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">{syncError}</p> : null}
     </div>
