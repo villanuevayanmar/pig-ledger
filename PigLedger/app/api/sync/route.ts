@@ -210,19 +210,34 @@ export async function POST(req: Request) {
           failure = 'The selected feed product has not synced yet.';
           break;
         }
-        const result = await sb.from('feed_inventory_movements').upsert({
-          id: await stableUuid(movement.id),
-          farm_id: farm.id,
-          product_id: movement.productId,
-          user_id: user.id,
-          movement_date: movement.movementDate || today(),
-          movement_type: movement.movementType,
-          quantity_units: num(movement.quantityUnits),
-          kg_per_unit_snapshot: num(movement.kgPerUnitSnapshot),
-          unit_cost: num(movement.unitCost),
-          notes: str(movement.notes)
-        }, { onConflict: 'id', ignoreDuplicates: true });
-        error = result.error;
+        const movementId = await stableUuid(movement.id);
+        if (movement.movementType === 'adjustment_out' || movement.movementType === 'waste') {
+          const result = await sb.rpc('record_feed_stock_out', {
+            p_id: movementId,
+            p_farm_id: farm.id,
+            p_product_id: movement.productId,
+            p_movement_date: movement.movementDate || today(),
+            p_movement_type: movement.movementType,
+            p_quantity_units: num(movement.quantityUnits),
+            p_kg_per_unit_snapshot: num(movement.kgPerUnitSnapshot),
+            p_notes: str(movement.notes)
+          });
+          error = result.error;
+        } else {
+          const result = await sb.from('feed_inventory_movements').upsert({
+            id: movementId,
+            farm_id: farm.id,
+            product_id: movement.productId,
+            user_id: user.id,
+            movement_date: movement.movementDate || today(),
+            movement_type: movement.movementType,
+            quantity_units: num(movement.quantityUnits),
+            kg_per_unit_snapshot: num(movement.kgPerUnitSnapshot),
+            unit_cost: num(movement.unitCost),
+            notes: str(movement.notes)
+          }, { onConflict: 'id', ignoreDuplicates: true });
+          error = result.error;
+        }
       } else if (op.kind === 'add-feed-consumption') {
         const consumption = op.consumption;
         const result = await sb.rpc('record_feed_consumption', {
