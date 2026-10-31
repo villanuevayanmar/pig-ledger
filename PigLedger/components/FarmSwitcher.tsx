@@ -53,12 +53,10 @@ export default function FarmSwitcher() {
       .order('created_at', { ascending: true });
     if (farmError) throw new Error('Could not load your available farms: ' + farmError.message);
 
-    let membershipRows: Member[] = [];
     const { data: memberships, error: membershipError } = await sb
       .from('farm_memberships')
       .select('farm_id, user_id, role')
       .eq('user_id', user.id);
-    if (!membershipError) membershipRows = (memberships ?? []) as Member[];
 
     const nextFarms = (farmRows ?? []).map((farm) => {
       const membership = (memberships ?? []).find((item) => item.farm_id === farm.id && item.user_id === user.id);
