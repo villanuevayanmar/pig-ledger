@@ -18,7 +18,7 @@ function str(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback;
 }
 
-async function ownedBatchExists(sb: ReturnType<typeof createClient>, batchId: string, farmId: string, userId: string) {
+async function ownedBatchExists(sb: ReturnType<typeof createClient>, batchId: string, farmId: string) {
   const { data, error } = await sb
     .from('batches')
     .select('id')
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
       } else if (op.kind === 'add-expense') {
         const expense = op.expense;
         const batchId = expense.batchId || null;
-        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id, user.id))) {
+        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id))) {
           failure = 'The selected batch is not synced yet. Keep the device online and sync again.';
           break;
         }
@@ -154,7 +154,7 @@ export async function POST(req: Request) {
         error = result.error;
       } else if (op.kind === 'delete-expense') {
         const deleteId = String(op.id).startsWith('local-') ? await deterministicUuid(`pig-ledger:${op.id}`) : op.id;
-        const result = await sb.from('expenses').delete().eq('id', deleteId);
+        const result = await sb.from('expenses').delete().eq('id', deleteId).eq('farm_id', farm.id);
         error = result.error;
       } else if (op.kind === 'add-sale') {
         const sale = op.sale;
@@ -197,7 +197,7 @@ export async function POST(req: Request) {
         error = result.error;
       } else if (op.kind === 'delete-sale') {
         const deleteId = String(op.id).startsWith('local-') ? await deterministicUuid(`pig-ledger:${op.id}`) : op.id;
-        const result = await sb.from('sales').delete().eq('id', deleteId);
+        const result = await sb.from('sales').delete().eq('id', deleteId).eq('farm_id', farm.id);
         error = result.error;
       } else if (op.kind === 'add-population-movement') {
         const movement = op.movement;
