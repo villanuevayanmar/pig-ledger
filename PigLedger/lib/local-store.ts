@@ -1,4 +1,5 @@
 import type { Batch, Expense, Farm, Sale } from './types';
+import { createBrowserClientApp } from './supabase/client';
 
 export type PendingOp =
   | { kind: 'add-expense'; expense: Expense }
@@ -20,7 +21,32 @@ export type LocalLedger = {
 
 const DB_NAME = 'pig-ledger-db';
 const STORE = 'ledger';
-const KEY = 'ledger-v1';
+const LEGACY_KEY = 'ledger-v1';
+const OWNER_KEY = 'pig-ledger-owner';
+
+async function scopedKey(): Promise<string> {
+  let userId = '';
+  try {
+    const { data } = await createBrowserClientApp().auth.getSession();
+    userId = data.session?.user.id ?? '';
+  } catch {
+    // The last authenticated owner is used only when the cached auth session cannot be read.
+  }
+  if (!userId && typeof window !== 'undefined') userId = window.localStorage.getItem(OWNER_KEY) ?? '';
+  if (!userId) throw new Error('Your account could not be identified. Sign in again before opening offline records.');
+
+  const key = 'ledger-v2:' + userId;
+  const existing = await idbGet(key);
+  if (!existing) {
+    const lastOwner = typeof window !== 'undefined' ? window.localStorage.getItem(OWNER_KEY) : null;
+    if (!lastOwner || lastOwner === userId) {
+      const legacy = await idbGet(LEGACY_KEY);
+      if (legacy) await idbSet(legacy, key);
+    }
+  }
+  if (typeof window !== 'undefined') window.localStorage.setItem(OWNER_KEY, userId);
+  return key;
+}
 
 function defaultFarm(): Farm {
   return { id: 'local-farm', name: 'My Piggery', pigCount: 0, startDate: '' };
@@ -52,11 +78,11 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function idbGet(): Promise<LocalLedger | null> {
+async function idbGet(key: string): Promise<LocalLedger | null> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).get(KEY);
+    const req = tx.objectStore(STORE).get(key);
     req.onsuccess = () => {
       db.close();
       resolve((req.result as LocalLedger) ?? null);
@@ -68,11 +94,11 @@ async function idbGet(): Promise<LocalLedger | null> {
   });
 }
 
-async function idbSet(ledger: LocalLedger): Promise<void> {
+async function idbSet(ledger: LocalLedger, key: string): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).put({ ...ledger, updatedAt: new Date().toISOString() }, KEY);
+    tx.objectStore(STORE).put({ ...ledger, updatedAt: new Date().toISOString() }, key);
     tx.oncomplete = () => {
       db.close();
       resolve();
@@ -85,9 +111,9 @@ async function idbSet(ledger: LocalLedger): Promise<void> {
 }
 
 export async function loadLocalLedger(): Promise<LocalLedger> {
-  try {
-    const saved = await idbGet();
-    if (saved && typeof saved === 'object') {
+  const key = await scopedKey();
+  const saved = await idbGet(key);
+  if (saved && typeof saved === 'object') {
       return {
         farm: saved.farm ?? defaultFarm(),
         batches: Array.isArray(saved.batches) ? saved.batches.filter((batch) => batch.status !== 'archived') : [],
@@ -96,19 +122,13 @@ export async function loadLocalLedger(): Promise<LocalLedger> {
         pending: Array.isArray(saved.pending) ? saved.pending : [],
         updatedAt: saved.updatedAt ?? new Date().toISOString()
       };
-    }
-  } catch {
-    // IndexedDB can be unavailable in private browsing modes.
   }
   return defaultLedger();
 }
 
 export async function saveLocalLedger(ledger: LocalLedger): Promise<void> {
-  try {
-    await idbSet(ledger);
-  } catch {
-    // Keep the current session usable even if local persistence is unavailable.
-  }
+  const key = await scopedKey();
+  await idbSet(ledger, key);
 }
 
 export async function replaceLocalWithServer(
