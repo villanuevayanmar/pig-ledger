@@ -177,7 +177,6 @@ export default function ExpensesClient() {
   const [expenseType, setExpenseType] = useState('feed');
 
   useEffect(() => {
-    loadLocalLedger().then(setLedger);
     syncLedgerNow().then(setLedger).catch(() => {});
   }, []);
 
