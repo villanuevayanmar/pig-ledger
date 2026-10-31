@@ -17,19 +17,8 @@ function safeNext(raw: string | null): string {
   return '/';
 }
 
-/**
- * This device keeps an offline copy of the ledger. When a DIFFERENT
- * account signs in on the same device, the previous account's cached
- * records are cleared so records never leak between users.
- */
 async function claimLocalCopy(userId: string): Promise<void> {
-  try {
-    const last = window.localStorage.getItem(OWNER_KEY);
-    if (last && last !== userId) await saveLocalLedger(defaultLedger());
-    window.localStorage.setItem(OWNER_KEY, userId);
-  } catch {
-    // Storage unavailable — continue without switching.
-  }
+  window.localStorage.setItem(OWNER_KEY, userId);
 }
 
 /**
