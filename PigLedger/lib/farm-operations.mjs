@@ -1,5 +1,6 @@
 const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const nonNegative = (value) => Math.max(0, finite(value));
+const wholeHeads = (value) => Math.floor(nonNegative(value));
 
 export function calculatePopulation(movements = [], sales = []) {
   const totals = {
@@ -7,7 +8,7 @@ export function calculatePopulation(movements = [], sales = []) {
     mortality: 0, adjustmentIn: 0, adjustmentOut: 0, sold: 0
   };
   for (const item of movements) {
-    const heads = nonNegative(item.heads);
+    const heads = wholeHeads(item.heads);
     switch (item.movementType) {
       case 'opening': totals.opening += heads; break;
       case 'purchase': totals.purchase += heads; break;
@@ -19,11 +20,11 @@ export function calculatePopulation(movements = [], sales = []) {
       default: break;
     }
   }
-  totals.sold = sales.reduce((sum, sale) => sum + nonNegative(sale.heads), 0);
+  totals.sold = sales.reduce((sum, sale) => sum + wholeHeads(sale.heads), 0);
   const currentHeads = totals.opening + totals.purchase + totals.transferIn +
     totals.adjustmentIn - totals.transferOut - totals.mortality -
     totals.adjustmentOut - totals.sold;
-  return { ...totals, currentHeads: Math.max(0, currentHeads), hasOverdraw: currentHeads < 0 };
+  return { ...totals, currentHeads, hasOverdraw: currentHeads < 0 };
 }
 
 export function calculateFeedStock(inventoryMovements = [], consumption = []) {
