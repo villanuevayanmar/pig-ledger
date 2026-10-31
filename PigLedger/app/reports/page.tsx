@@ -26,11 +26,7 @@ export default function ReportsPage() {
   const [selectedBatchId, setSelectedBatchId] = useState('all');
 
   useEffect(() => {
-    loadLocalLedger().then((value) => {
-      setLedger(value);
-      setSelectedBatchId(value.batches.find((batch) => batch.status === 'active')?.id ?? 'all');
-    });
-    syncLedgerNow().then((value) => {
+        syncLedgerNow().then((value) => {
       setLedger(value);
       setSelectedBatchId((current) => current === 'all'
         ? value.batches.find((batch) => batch.status === 'active')?.id ?? 'all'
