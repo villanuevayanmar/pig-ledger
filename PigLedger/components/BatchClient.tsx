@@ -125,7 +125,7 @@ export default function BatchClient() {
 
   return (
     <div className="space-y-4">
-      <SyncStatus pending={ledger.pending.length} onSync={async () => setLedger(await syncLedgerNow())} />
+      <SyncStatus pending={ledger.pending.length} syncError={ledger.syncError} onSync={async () => setLedger(await syncLedgerNow())} />
       <div className="flex items-start justify-between gap-3">
         <div><h2 className="section-title mb-1">Batches</h2><p className="section-sub">Actual results come from linked transactions. Projections stay separate from the ledger.</p></div>
         <button type="button" onClick={() => setCreating((value) => !value)} className="btn-primary shrink-0"><Icon name="plus" className="h-4 w-4" /> New batch</button>
