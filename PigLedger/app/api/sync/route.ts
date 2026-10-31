@@ -178,20 +178,15 @@ export async function POST(req: Request) {
         error = result.error;
       } else if (op.kind === 'add-population-movement') {
         const movement = op.movement;
-        if (!(await ownedBatchExists(sb, movement.batchId, farm.id, user.id))) {
-          failure = 'The selected batch is not synced to this farm yet.';
-          break;
-        }
-        const result = await sb.from('population_movements').upsert({
-          id: await stableUuid(movement.id),
-          farm_id: farm.id,
-          batch_id: movement.batchId,
-          user_id: user.id,
-          movement_date: movement.movementDate || today(),
-          movement_type: movement.movementType,
-          heads: Math.max(1, Math.floor(num(movement.heads))),
-          notes: str(movement.notes)
-        }, { onConflict: 'id', ignoreDuplicates: true });
+        const result = await sb.rpc('record_population_movement', {
+          p_id: await stableUuid(movement.id),
+          p_farm_id: farm.id,
+          p_batch_id: movement.batchId,
+          p_movement_date: movement.movementDate || today(),
+          p_movement_type: movement.movementType,
+          p_heads: Math.max(1, Math.floor(num(movement.heads))),
+          p_notes: str(movement.notes)
+        });
         error = result.error;
       } else if (op.kind === 'add-feed-product') {
         const product = op.product;
