@@ -76,3 +76,31 @@ export function calculateGrowthMetrics({ startWeightKg, endWeightKg, days, consu
 
 function round2(value) { return Math.round((value + Number.EPSILON) * 100) / 100; }
 function round4(value) { return Math.round((value + Number.EPSILON) * 10000) / 10000; }
+
+export function calculateBatchGrowthMetrics({
+  startAverageWeightKg, endAverageWeightKg, startHeadCount, endHeadCount,
+  days, consumedFeedKg, populationChanged = false
+}) {
+  const startWeight = nonNegative(startAverageWeightKg);
+  const endWeight = nonNegative(endAverageWeightKg);
+  const startHeads = wholeHeads(startHeadCount);
+  const endHeads = wholeHeads(endHeadCount);
+  const duration = nonNegative(days);
+  const feedKg = nonNegative(consumedFeedKg);
+  const gainPerHeadKg = endWeight - startWeight;
+  const averageDailyGainKg = duration > 0 && gainPerHeadKg >= 0
+    ? round4(gainPerHeadKg / duration)
+    : null;
+  const comparablePopulation = !populationChanged && startHeads > 0 && startHeads === endHeads;
+  const totalGainKg = comparablePopulation && gainPerHeadKg > 0
+    ? round2(gainPerHeadKg * startHeads)
+    : null;
+  const fcr = totalGainKg !== null && feedKg > 0 ? round4(feedKg / totalGainKg) : null;
+  return {
+    gainPerHeadKg: round2(gainPerHeadKg),
+    averageDailyGainKg,
+    totalGainKg,
+    fcr,
+    fcrEligible: comparablePopulation && gainPerHeadKg > 0 && feedKg > 0
+  };
+}
