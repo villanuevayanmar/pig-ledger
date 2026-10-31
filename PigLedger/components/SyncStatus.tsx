@@ -75,6 +75,7 @@ export default function SyncStatus({
   }
 
   return (
+    <div className="space-y-2">
     <button
       type="button"
       onClick={doSync}
@@ -92,6 +93,7 @@ export default function SyncStatus({
           ? `Online — ${pending} entr${pending > 1 ? 'ies' : 'y'} pending synchronization`
           : `Online — all records synchronized${lastSync ? ' · ' + lastSync : ''}`}
     </button>
-    {syncError ? <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">{syncError}</p> : null}
+    {syncError ? <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">{syncError}</p> : null}
+    </div>
   );
 }
