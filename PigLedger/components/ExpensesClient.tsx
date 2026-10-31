@@ -250,12 +250,8 @@ export default function ExpensesClient() {
     if (!confirm('Delete this expense record? This action cannot be undone.')) return;
     const local = await loadLocalLedger();
     local.expenses = local.expenses.filter((e) => e.id !== id);
-    const addIndex = local.pending.findIndex((op) => op.kind === 'add-expense' && op.expense.id === id);
-    if (addIndex >= 0) {
-      local.pending = local.pending.filter((op) => !((op.kind === 'add-expense' || op.kind === 'update-expense') && op.expense.id === id));
-    } else {
-      local.pending = [...local.pending, { kind: 'delete-expense', id }];
-    }
+    local.pending = local.pending.filter((op) => !((op.kind === 'add-expense' || op.kind === 'update-expense') && op.expense.id === id));
+    local.pending = [...local.pending, { kind: 'delete-expense', id }];
     await saveLocalLedger(local);
     setLedger({ ...local });
     syncLedgerNow().then(setLedger).catch(() => {});
