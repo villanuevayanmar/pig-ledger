@@ -356,6 +356,9 @@ begin
   if auth.uid() is null then
     raise exception 'Authentication required';
   end if;
+  if not private.can_write_farm(p_farm_id) then
+    raise exception 'You do not have permission to record activity for this farm';
+  end if;
   if p_quantity_units is null or p_quantity_units <= 0
      or p_kg_per_unit_snapshot is null or p_kg_per_unit_snapshot <= 0 then
     raise exception 'Consumption quantity and kilograms per unit must be greater than zero';
@@ -473,6 +476,9 @@ declare
 begin
   if auth.uid() is null then
     raise exception 'Authentication required';
+  end if;
+  if not private.can_write_farm(p_farm_id) then
+    raise exception 'You do not have permission to record activity for this farm';
   end if;
   if p_heads is null or p_heads <= 0 then
     raise exception 'The number of pigs must be a positive whole number';
@@ -660,6 +666,9 @@ begin
   if auth.uid() is null then
     raise exception 'Authentication required';
   end if;
+  if not private.can_write_farm(p_farm_id) then
+    raise exception 'You do not have permission to record activity for this farm';
+  end if;
   if p_movement_type not in ('adjustment_out', 'waste') then
     raise exception 'Stock-out movement type is invalid';
   end if;
@@ -754,6 +763,9 @@ begin
   if auth.uid() is null then
     raise exception 'Authentication required';
   end if;
+  if not private.can_write_farm(p_farm_id) then
+    raise exception 'You do not have permission to record activity for this farm';
+  end if;
   if p_amount is null or p_amount <= 0 then
     raise exception 'Payment amount must be greater than zero';
   end if;
@@ -803,3 +815,34 @@ $$;
 
 revoke all on function public.record_sale_payment(uuid, uuid, uuid, date, numeric, text, text, text)
   from public, anon;
+
+-- Sale receipts must be created through record_sale_payment so the sale row
+-- lock and outstanding-balance validation cannot be bypassed.
+revoke insert, update, delete on public.sale_payments from anon, authenticated;
+grant select on public.sale_payments to authenticated;
+
+create or replace function public.validate_sale_gross_against_payments()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_paid numeric := 0;
+begin
+  if new.gross is null or new.gross < 0 then
+    raise exception 'Sale revenue cannot be negative';
+  end if;
+
+  select coalesce(sum(p.amount), 0)
+    into v_paid
+  from public.sale_payments p
+  where p.sale_id = new.id and p.farm_id = new.farm_id;
+
+  if v_paid > new.gross + 0.000001 then
+    raise exception 'Sale revenue cannot be reduced below payments already received (% paid)',
+      round(v_paid, 2);
+  end if;
+  return new;
+end;
+$$;
