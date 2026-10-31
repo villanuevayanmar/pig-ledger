@@ -152,7 +152,7 @@ export async function POST(req: Request) {
           price_per_kg: pricePerKg,
           gross: round2(weightKg * pricePerKg),
           batch_id: batchId
-        }, { onConflict: 'id', ignoreDuplicates: true });
+        }, { onConflict: 'id' });
         error = result.error;
       } else if (op.kind === 'update-sale') {
         const sale = op.sale;
