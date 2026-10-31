@@ -171,18 +171,16 @@ async function performSyncLedgerNow(): Promise<LocalLedger> {
   return loadLocalLedger();
 }
 
-export async function syncLedgerNow(): Promise<LocalLedger> {
+export function syncLedgerNow(): Promise<LocalLedger> {
   if (syncInFlight) {
-    await syncInFlight;
-    return syncLedgerNow();
+    return syncInFlight.then(() => syncLedgerNow());
   }
   const task = performSyncLedgerNow();
-  syncInFlight = task;
-  try {
-    return await task;
-  } finally {
-    if (syncInFlight === task) syncInFlight = null;
-  }
+  const wrapped = task.finally(() => {
+    if (syncInFlight === wrapped) syncInFlight = null;
+  });
+  syncInFlight = wrapped;
+  return wrapped;
 }
 
 export default function ExpensesClient() {
