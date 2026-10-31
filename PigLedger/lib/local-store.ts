@@ -147,7 +147,11 @@ export async function replaceLocalWithServer(
   sales: Sale[],
   batches: Batch[] = []
 ): Promise<LocalLedger> {
-  const local = await loadLocalLedger();
+  let local = await loadLocalLedger();
+  if (local.farm.id !== 'local-farm' && local.farm.id !== farm.id) {
+    setActiveFarmScope(farm.id);
+    local = await loadLocalLedger();
+  }
   const pendingBatches = local.pending
     .filter((op) => op.kind === 'add-batch' || op.kind === 'update-batch')
     .map((op) => op.batch);
