@@ -7,6 +7,7 @@ import {
   loadLocalLedger, saveLocalLedger, type LocalLedger
 } from '@/lib/local-store';
 import type { Customer, Supplier, SalePayment, SalePaymentMethod } from '@/lib/types';
+import { calculateSaleBalances } from '@/lib/business-math.mjs';
 import { syncLedgerNow } from '@/components/ExpensesClient';
 
 const PAYMENT_METHODS: Array<{ value: SalePaymentMethod; label: string }> = [
@@ -28,19 +29,25 @@ export default function BusinessClient() {
     });
   }, []);
 
+  const settlementSummary = useMemo(
+    () => ledger ? calculateSaleBalances(ledger.sales, ledger.salePayments) : null,
+    [ledger]
+  );
   const settlement = useMemo(() => {
-    if (!ledger) return [];
-    return ledger.sales.map((sale) => {
-      const paid = round2(ledger.salePayments
-        .filter((payment) => payment.saleId === sale.id)
-        .reduce((sum, payment) => sum + payment.amount, 0));
-      const balance = round2(Math.max(0, sale.gross - paid));
-      return { sale, paid, balance, overpaid: paid > sale.gross + 0.000001 };
-    }).sort((a, b) => b.sale.date.localeCompare(a.sale.date));
-  }, [ledger]);
+    if (!ledger || !settlementSummary) return [];
+    const salesById = new Map(ledger.sales.map((sale) => [sale.id, sale]));
+    return settlementSummary.rows.map((row) => ({
+      sale: salesById.get(row.saleId)!,
+      paid: row.paid,
+      balance: row.balance,
+      overpaid: row.overpaid,
+      status: row.status
+    })).filter((row) => Boolean(row.sale))
+      .sort((a, b) => b.sale.date.localeCompare(a.sale.date));
+  }, [ledger, settlementSummary]);
 
-  const cashReceived = round2(ledger?.salePayments.reduce((sum, payment) => sum + payment.amount, 0) ?? 0);
-  const outstanding = round2(settlement.reduce((sum, row) => sum + row.balance, 0));
+  const cashReceived = settlementSummary?.cashReceived ?? 0;
+  const outstanding = settlementSummary?.outstanding ?? 0;
 
   async function updateLocal(mutator: (local: LocalLedger) => void, successMessage: string) {
     const local = await loadLocalLedger();
@@ -233,7 +240,7 @@ export default function BusinessClient() {
           <h3 className="font-semibold">Sale payments and receivables</h3>
           <p className="text-xs text-slate-500">Record full or partial payments. The database prevents payments above the remaining balance.</p>
         </div>
-        {settlement.length > 0 ? settlement.map(({ sale, paid, balance, overpaid }) => {
+        {settlement.length > 0 ? settlement.map(({ sale, paid, balance, overpaid, status }) => {
           const customer = ledger.customers.find((item) => item.id === sale.customerId);
           const payments = ledger.salePayments.filter((item) => item.saleId === sale.id).slice().sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
           return (
@@ -244,7 +251,7 @@ export default function BusinessClient() {
                   <p className="text-xs text-slate-500">{fmtDate(sale.date)} · Sale total {fmt(sale.gross)}</p>
                 </div>
                 <span className={'shrink-0 text-xs font-semibold ' + (overpaid ? 'text-rose-700' : balance <= 0 ? 'text-emerald-700' : paid > 0 ? 'text-amber-700' : 'text-slate-500')}>
-                  {overpaid ? 'Overpaid' : balance <= 0 ? 'Paid' : paid > 0 ? 'Part-paid' : 'Unpaid'}
+                  {status === 'overpaid' ? 'Overpaid' : status === 'paid' ? 'Paid' : status === 'part-paid' ? 'Part-paid' : 'Unpaid'}
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
