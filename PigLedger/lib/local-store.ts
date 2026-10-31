@@ -1,4 +1,4 @@
-import type { Batch, Expense, Farm, Sale } from './types';
+import type { Batch, Expense, Farm, Sale, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord } from './types';
 import { createBrowserClientApp } from './supabase/client';
 
 export type PendingOp =
@@ -10,13 +10,21 @@ export type PendingOp =
   | { kind: 'update-sale'; sale: Sale }
   | { kind: 'add-batch'; batch: Batch }
   | { kind: 'update-batch'; batch: Batch }
-  | { kind: 'update-farm'; farm: Farm };
+  | { kind: 'update-farm'; farm: Farm }
+  | { kind: 'add-population-movement'; movement: PopulationMovement }
+  | { kind: 'add-feed-product'; product: FeedProduct }
+  | { kind: 'add-feed-inventory'; movement: FeedInventoryMovement }
+  | { kind: 'add-feed-consumption'; consumption: FeedConsumptionRecord };
 
 export type LocalLedger = {
   farm: Farm;
   batches: Batch[];
   expenses: Expense[];
   sales: Sale[];
+  populationMovements: PopulationMovement[];
+  feedProducts: FeedProduct[];
+  feedInventoryMovements: FeedInventoryMovement[];
+  feedConsumption: FeedConsumptionRecord[];
   pending: PendingOp[];
   syncError?: string | null;
   updatedAt: string;
@@ -61,6 +69,10 @@ export function defaultLedger(): LocalLedger {
     batches: [],
     expenses: [],
     sales: [],
+    populationMovements: [],
+    feedProducts: [],
+    feedInventoryMovements: [],
+    feedConsumption: [],
     pending: [],
     syncError: null,
     updatedAt: new Date().toISOString()
@@ -123,6 +135,10 @@ export async function loadLocalLedger(): Promise<LocalLedger> {
         batches: Array.isArray(saved.batches) ? saved.batches : [],
         expenses: Array.isArray(saved.expenses) ? saved.expenses : [],
         sales: Array.isArray(saved.sales) ? saved.sales : [],
+        populationMovements: Array.isArray(saved.populationMovements) ? saved.populationMovements : [],
+        feedProducts: Array.isArray(saved.feedProducts) ? saved.feedProducts : [],
+        feedInventoryMovements: Array.isArray(saved.feedInventoryMovements) ? saved.feedInventoryMovements : [],
+        feedConsumption: Array.isArray(saved.feedConsumption) ? saved.feedConsumption : [],
         pending: Array.isArray(saved.pending) ? saved.pending : [],
         syncError: typeof saved.syncError === 'string' ? saved.syncError : null,
         updatedAt: saved.updatedAt ?? new Date().toISOString()
@@ -182,6 +198,10 @@ export async function replaceLocalWithServer(
     batches: mergedBatches,
     expenses: mergedExpenses,
     sales: mergedSales,
+    populationMovements: local.populationMovements ?? [],
+    feedProducts: local.feedProducts ?? [],
+    feedInventoryMovements: local.feedInventoryMovements ?? [],
+    feedConsumption: local.feedConsumption ?? [],
     pending: local.pending,
     syncError: local.syncError ?? null,
     updatedAt: new Date().toISOString()
