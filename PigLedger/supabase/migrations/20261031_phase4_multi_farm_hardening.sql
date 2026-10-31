@@ -231,6 +231,109 @@ create policy sale_payments_staff_insert on public.sale_payments
     )
   );
 
+
+-- Multi-farm version of inventory movement RPC. It keeps the per-product lock,
+-- role checks, idempotency, and server-side stock-out validation.
+create or replace function public.record_feed_inventory_movement(
+  p_id uuid,
+  p_farm_id uuid,
+  p_product_id uuid,
+  p_movement_date date,
+  p_movement_type text,
+  p_quantity_units numeric,
+  p_kg_per_unit_snapshot numeric,
+  p_unit_cost numeric default 0,
+  p_notes text default ''
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_product_kg numeric;
+  v_stock_kg numeric := 0;
+  v_required_kg numeric := 0;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Authentication required';
+  end if;
+  if not private.can_write_farm(p_farm_id) then
+    raise exception 'You do not have permission to record inventory for this farm';
+  end if;
+  if p_movement_type not in ('purchase', 'adjustment_in', 'adjustment_out', 'waste') then
+    raise exception 'Unsupported feed inventory movement type';
+  end if;
+  if p_quantity_units is null or p_quantity_units <= 0
+     or p_kg_per_unit_snapshot is null or p_kg_per_unit_snapshot <= 0
+     or p_unit_cost is null or p_unit_cost < 0 then
+    raise exception 'Quantity and kilograms per unit must be positive; unit cost cannot be negative';
+  end if;
+
+  select fp.kg_per_unit
+    into v_product_kg
+  from public.feed_products fp
+  where fp.id = p_product_id
+    and fp.farm_id = p_farm_id
+    and fp.is_active
+  for update;
+  if not found then
+    raise exception 'Feed product not found or inactive';
+  end if;
+
+  if exists (
+    select 1 from public.feed_inventory_movements im
+    where im.id = p_id and im.farm_id = p_farm_id
+  ) then
+    return p_id;
+  end if;
+
+  if abs(v_product_kg - p_kg_per_unit_snapshot) > 0.000001 then
+    raise exception 'The feed product unit weight changed. Refresh the page and record the movement again.';
+  end if;
+
+  select coalesce(sum(
+    case
+      when im.movement_type in ('purchase', 'adjustment_in')
+        then im.quantity_units * im.kg_per_unit_snapshot
+      when im.movement_type in ('adjustment_out', 'waste')
+        then -im.quantity_units * im.kg_per_unit_snapshot
+      else 0
+    end
+  ), 0)
+    into v_stock_kg
+  from public.feed_inventory_movements im
+  where im.product_id = p_product_id and im.farm_id = p_farm_id;
+
+  select v_stock_kg - coalesce(sum(fc.quantity_units * fc.kg_per_unit_snapshot), 0)
+    into v_stock_kg
+  from public.feed_consumption fc
+  where fc.product_id = p_product_id and fc.farm_id = p_farm_id;
+
+  if p_movement_type in ('adjustment_out', 'waste') then
+    v_required_kg := p_quantity_units * p_kg_per_unit_snapshot;
+    if v_stock_kg + 0.000001 < v_required_kg then
+      raise exception 'Insufficient feed stock. Available: % kg; requested: % kg',
+        round(v_stock_kg, 2), round(v_required_kg, 2);
+    end if;
+  end if;
+
+  insert into public.feed_inventory_movements (
+    id, farm_id, product_id, user_id, movement_date, movement_type,
+    quantity_units, kg_per_unit_snapshot, unit_cost, notes
+  ) values (
+    p_id, p_farm_id, p_product_id, (select auth.uid()),
+    coalesce(p_movement_date, current_date), p_movement_type,
+    p_quantity_units, p_kg_per_unit_snapshot, p_unit_cost, coalesce(p_notes, '')
+  );
+  return p_id;
+end;
+$$;
+
+revoke all on function public.record_feed_inventory_movement(uuid, uuid, uuid, date, text, numeric, numeric, numeric, text)
+  from public, anon;
+grant execute on function public.record_feed_inventory_movement(uuid, uuid, uuid, date, text, numeric, numeric, numeric, text)
+  to authenticated;
 create or replace function public.record_feed_consumption(
   p_id uuid,
   p_farm_id uuid,
@@ -244,7 +347,7 @@ create or replace function public.record_feed_consumption(
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $
 declare
   v_stock_kg numeric := 0;
@@ -261,7 +364,7 @@ begin
   -- A retry after a successful insert must be idempotent.
   if exists (
     select 1 from public.feed_consumption fc
-    where fc.id = p_id and fc.user_id = (select auth.uid())
+    where fc.id = p_id and fc.farm_id = p_farm_id
   ) then
     return p_id;
   end if;
@@ -279,7 +382,7 @@ begin
   -- Recheck after acquiring the product lock to make retries idempotent under concurrency.
   if exists (
     select 1 from public.feed_consumption fc
-    where fc.id = p_id and fc.user_id = (select auth.uid())
+    where fc.id = p_id and fc.farm_id = p_farm_id
   ) then
     return p_id;
   end if;
@@ -358,7 +461,7 @@ create or replace function public.record_population_movement(
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $
 declare
   v_initial_heads integer;
@@ -380,7 +483,7 @@ begin
 
   if exists (
     select 1 from public.population_movements pm
-    where pm.id = p_id and pm.user_id = (select auth.uid())
+    where pm.id = p_id and pm.farm_id = p_farm_id
   ) then
     return p_id;
   end if;
@@ -398,7 +501,7 @@ begin
   -- Recheck after the batch lock so concurrent retries with the same ID are idempotent.
   if exists (
     select 1 from public.population_movements pm
-    where pm.id = p_id and pm.user_id = (select auth.uid())
+    where pm.id = p_id and pm.farm_id = p_farm_id
   ) then
     return p_id;
   end if;
@@ -462,7 +565,7 @@ create or replace function public.validate_batch_sale_population()
 returns trigger
 language plpgsql
 security invoker
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_initial_heads integer;
@@ -482,7 +585,6 @@ begin
   from public.batches b
   where b.id = new.batch_id
     and b.farm_id = new.farm_id
-    and b.user_id = (select auth.uid())
   for update;
   if not found then
     raise exception 'Batch does not belong to this farm';
@@ -548,9 +650,9 @@ create or replace function public.record_feed_stock_out(
 )
 returns uuid
 language plpgsql
-security invoker
-set search_path = public
-as $$
+security definer
+set search_path = ''
+as $
 declare
   v_stock_kg numeric := 0;
   v_required_kg numeric := 0;
@@ -577,7 +679,7 @@ begin
 
   if exists (
     select 1 from public.feed_inventory_movements im
-    where im.id = p_id and im.user_id = (select auth.uid())
+    where im.id = p_id and im.farm_id = p_farm_id
   ) then
     return p_id;
   end if;
@@ -643,7 +745,7 @@ create or replace function public.record_sale_payment(
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_sale_gross numeric := 0;
@@ -671,7 +773,7 @@ begin
 
   if exists (
     select 1 from public.sale_payments p
-    where p.id = p_id and p.user_id = (select auth.uid())
+    where p.id = p_id and p.farm_id = p_farm_id
   ) then
     return p_id;
   end if;
