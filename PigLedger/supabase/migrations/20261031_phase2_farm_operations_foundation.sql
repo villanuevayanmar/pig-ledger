@@ -89,45 +89,124 @@ alter table public.feed_products enable row level security;
 alter table public.feed_inventory_movements enable row level security;
 alter table public.feed_consumption enable row level security;
 
+-- Movement ledgers are append-only. Correct errors with counter-movements
+-- so stock and herd history remains auditable.
 drop policy if exists population_movements_farm_owner on public.population_movements;
-create policy population_movements_farm_owner on public.population_movements
-  for all to authenticated
-  using (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = population_movements.farm_id and f.user_id = (select auth.uid())
-  ))
-  with check (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = feed_products.farm_id and f.user_id = (select auth.uid())
-  ));
+drop policy if exists population_movements_select_owner on public.population_movements;
+drop policy if exists population_movements_insert_owner on public.population_movements;
+create policy population_movements_select_owner on public.population_movements
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.farms f
+      where f.id = population_movements.farm_id
+        and f.user_id = (select auth.uid())
+    )
+  );
+create policy population_movements_insert_owner on public.population_movements
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.farms f
+      where f.id = population_movements.farm_id
+        and f.user_id = (select auth.uid())
+    )
+    and exists (
+      select 1 from public.batches b
+      where b.id = population_movements.batch_id
+        and b.farm_id = population_movements.farm_id
+        and b.user_id = (select auth.uid())
+    )
+  );
 
 drop policy if exists feed_products_farm_owner on public.feed_products;
-create policy feed_products_farm_owner on public.feed_products
+drop policy if exists feed_products_owner on public.feed_products;
+create policy feed_products_owner on public.feed_products
   for all to authenticated
-  using (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = feed_inventory_movements.farm_id and f.user_id = (select auth.uid())
-  ))
-  with check (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = feed_consumption.farm_id and f.user_id = (select auth.uid())
-  ));
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.farms f
+      where f.id = feed_products.farm_id
+        and f.user_id = (select auth.uid())
+    )
+  )
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.farms f
+      where f.id = feed_products.farm_id
+        and f.user_id = (select auth.uid())
+    )
+  );
 
 drop policy if exists feed_inventory_farm_owner on public.feed_inventory_movements;
-create policy feed_inventory_farm_owner on public.feed_inventory_movements
-  for all to authenticated
-  using (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = farm_id and f.user_id = (select auth.uid())
-  ))
-  with check (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = farm_id and f.user_id = (select auth.uid())
-  ));
+drop policy if exists feed_inventory_select_owner on public.feed_inventory_movements;
+drop policy if exists feed_inventory_insert_owner on public.feed_inventory_movements;
+create policy feed_inventory_select_owner on public.feed_inventory_movements
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.farms f
+      where f.id = feed_inventory_movements.farm_id
+        and f.user_id = (select auth.uid())
+    )
+  );
+create policy feed_inventory_insert_owner on public.feed_inventory_movements
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.farms f
+      where f.id = feed_inventory_movements.farm_id
+        and f.user_id = (select auth.uid())
+    )
+    and exists (
+      select 1 from public.feed_products p
+      where p.id = feed_inventory_movements.product_id
+        and p.farm_id = feed_inventory_movements.farm_id
+        and p.user_id = (select auth.uid())
+    )
+  );
 
 drop policy if exists feed_consumption_farm_owner on public.feed_consumption;
-create policy feed_consumption_farm_owner on public.feed_consumption
-  for all to authenticated
-  using (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = farm_id and f.user_id = (select auth.uid())
-  ))
-  with check (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = farm_id and f.user_id = (select auth.uid())
-  ));
+drop policy if exists feed_consumption_select_owner on public.feed_consumption;
+drop policy if exists feed_consumption_insert_owner on public.feed_consumption;
+create policy feed_consumption_select_owner on public.feed_consumption
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.farms f
+      where f.id = feed_consumption.farm_id
+        and f.user_id = (select auth.uid())
+    )
+  );
+create policy feed_consumption_insert_owner on public.feed_consumption
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and exists (
+      select 1 from public.farms f
+      where f.id = feed_consumption.farm_id
+        and f.user_id = (select auth.uid())
+    )
+    and exists (
+      select 1 from public.batches b
+      where b.id = feed_consumption.batch_id
+        and b.farm_id = feed_consumption.farm_id
+        and b.user_id = (select auth.uid())
+    )
+    and exists (
+      select 1 from public.feed_products p
+      where p.id = feed_consumption.product_id
+        and p.farm_id = feed_consumption.farm_id
+        and p.user_id = (select auth.uid())
+    )
+  );
 
 comment on table public.population_movements is
   'Append-only population event ledger; sales are accounted for in the sales table to prevent double counting.';
