@@ -124,7 +124,7 @@ function validDate(value: unknown): boolean {
 async function backupId(sourceId: unknown, table: 'expenses' | 'sales', index: number): Promise<string> {
   const raw = typeof sourceId === 'string' ? sourceId : '';
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)) return raw;
-  const input = new TextEncoder().encode(`pig-ledger-backup:${table}:${raw || index}`);
+  const input = new TextEncoder().encode(`pig-ledger:${raw || `${table}:${index}`}`);
   const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', input)).slice(0, 16);
   const hex = Array.from(hash, (byte) => byte.toString(16).padStart(2, '0')).join('');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
