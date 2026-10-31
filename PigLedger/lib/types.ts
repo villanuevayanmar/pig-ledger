@@ -160,3 +160,34 @@ export type FeedConsumptionRecord = {
   kgPerUnitSnapshot: number;
   notes: string;
 };
+
+export type WeightRecord = {
+  id: string;
+  farmId: string;
+  batchId: string;
+  measuredOn: string;
+  headCount: number;
+  averageWeightKg: number;
+  notes: string;
+};
+
+export type HealthRecordType =
+  | 'observation' | 'illness' | 'treatment' | 'vaccination'
+  | 'deworming' | 'medication' | 'recovery';
+
+export type HealthRecord = {
+  id: string;
+  farmId: string;
+  batchId: string;
+  recordDate: string;
+  recordType: HealthRecordType;
+  title: string;
+  symptoms: string;
+  medicine: string;
+  dosage: string;
+  treatedHeads: number;
+  cost: number;
+  expenseId?: string | null;
+  nextDueDate?: string | null;
+  notes: string;
+};
