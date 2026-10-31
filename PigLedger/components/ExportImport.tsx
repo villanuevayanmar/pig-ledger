@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import Icon from '@/components/Icon';
-import { clearAll, importAll } from '@/app/actions';
+import { importAll } from '@/app/actions';
 import { today } from '@/lib/format';
 import type { Expense, Farm, Sale, Totals } from '@/lib/types';
 
@@ -63,7 +63,7 @@ export default function ExportImport({
     if (!file) return;
     const text = await file.text();
     if (fileRef.current) fileRef.current.value = '';
-    if (!confirm('Restore this backup? It will permanently replace all records currently stored.')) return;
+    if (!confirm('Merge this backup? Existing records will not be deleted or overwritten. Duplicate IDs will be skipped.')) return;
 
     setBusy(true);
     const result = await importAll(text);
@@ -72,16 +72,7 @@ export default function ExportImport({
     if (result.ok) router.refresh();
   }
 
-  function clearEverything() {
-    if (!confirm('Delete ALL expenses, sales and settings? This cannot be undone.')) return;
-    if (!confirm('Confirm deletion? Downloading a backup first is strongly recommended.')) return;
-    setBusy(true);
-    clearAll().finally(() => {
-      setBusy(false);
-      router.refresh();
-      alert('All records deleted.');
-    });
-  }
+
 
   return (
     <div className="card space-y-3">
@@ -102,7 +93,7 @@ export default function ExportImport({
         onClick={pickBackup}
         disabled={busy}
       >
-        Restore from Backup
+        Merge Backup Safely
       </button>
       <input
         ref={fileRef}
@@ -120,15 +111,7 @@ export default function ExportImport({
         Print Ledger
       </button>
 
-      <button
-        type="button"
-        className="btn-danger w-full"
-        onClick={clearEverything}
-        disabled={busy}
-      >
-        <Icon name="trash" className="h-4 w-4" />
-        Delete All Data
-      </button>
+>
     </div>
   );
 }
