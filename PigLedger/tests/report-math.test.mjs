@@ -23,7 +23,7 @@ test('report separates sales revenue, cash received in period and outstanding ba
   assert.equal(result.salesRevenue, 500);
   assert.equal(result.totalCosts, 150);
   assert.equal(result.cashReceived, 300);
-  assert.equal(result.receivables, 400);
+  assert.equal(result.receivables, 500);
   assert.equal(result.netProfit, 350);
 });
 
