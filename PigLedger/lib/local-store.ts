@@ -16,6 +16,7 @@ export type LocalLedger = {
   expenses: Expense[];
   sales: Sale[];
   pending: PendingOp[];
+  syncError?: string | null;
   updatedAt: string;
 };
 
@@ -58,6 +59,7 @@ export function defaultLedger(): LocalLedger {
     expenses: [],
     sales: [],
     pending: [],
+    syncError: null,
     updatedAt: new Date().toISOString()
   };
 }
@@ -119,6 +121,7 @@ export async function loadLocalLedger(): Promise<LocalLedger> {
         expenses: Array.isArray(saved.expenses) ? saved.expenses : [],
         sales: Array.isArray(saved.sales) ? saved.sales : [],
         pending: Array.isArray(saved.pending) ? saved.pending : [],
+        syncError: typeof saved.syncError === 'string' ? saved.syncError : null,
         updatedAt: saved.updatedAt ?? new Date().toISOString()
       };
   }
@@ -166,6 +169,7 @@ export async function replaceLocalWithServer(
     expenses: mergedExpenses,
     sales: mergedSales,
     pending: local.pending,
+    syncError: local.syncError ?? null,
     updatedAt: new Date().toISOString()
   };
   await saveLocalLedger(next);
