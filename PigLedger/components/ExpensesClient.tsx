@@ -15,7 +15,7 @@ import {
   type PendingOp
 } from '@/lib/local-store';
 import { CATEGORIES, FEED_CATEGORIES, UNITS } from '@/lib/types';
-import type { Batch, Expense, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord, WeightRecord, HealthRecord } from '@/lib/types';
+import type { Batch, Expense, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord, WeightRecord, HealthRecord, Customer, Supplier, SalePayment } from '@/lib/types';
 
 export async function pullServerLedger() {
   const sb = createBrowserClientApp();
@@ -76,14 +76,14 @@ export async function pullServerLedger() {
   }));
   const { data: eRows, error: expenseReadError } = await sb
     .from('expenses')
-    .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name')
+    .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name, supplier_id')
     .eq('farm_id', farm.id)
     .eq('user_id', uid)
     .order('date', { ascending: false });
   if (expenseReadError) throw new Error('Could not refresh expenses.');
   const { data: sRows, error: salesReadError } = await sb
     .from('sales')
-    .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id')
+    .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id, customer_id')
     .eq('farm_id', farm.id)
     .eq('user_id', uid)
     .order('date', { ascending: false });
@@ -126,6 +126,26 @@ export async function pullServerLedger() {
   if (monitoringErrors.length > 0 && !missingMonitoringSchema) {
     throw new Error('Could not refresh animal monitoring records.');
   }
+  const [customerResult, supplierResult, paymentResult] = await Promise.all([
+    sb.from('customers')
+      .select('id, farm_id, name, phone, email, address, notes, is_active, created_at')
+      .eq('farm_id', farm.id).eq('user_id', uid).order('name', { ascending: true }),
+    sb.from('suppliers')
+      .select('id, farm_id, name, phone, email, address, notes, is_active, created_at')
+      .eq('farm_id', farm.id).eq('user_id', uid).order('name', { ascending: true }),
+    sb.from('sale_payments')
+      .select('id, farm_id, sale_id, payment_date, amount, payment_method, reference, notes')
+      .eq('farm_id', farm.id).eq('user_id', uid).order('payment_date', { ascending: false })
+  ]);
+  const businessErrors = [customerResult.error, supplierResult.error, paymentResult.error].filter(Boolean);
+  const missingBusinessSchema = businessErrors.some((error) =>
+    error?.code === '42P01' || error?.code === 'PGRST205' ||
+    /could not find the table|relation .* does not exist/i.test(error?.message ?? '')
+  );
+  if (businessErrors.length > 0 && !missingBusinessSchema) {
+    throw new Error('Could not refresh business records.');
+  }
+
 
 
   const expenses: Expense[] = ((eRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
@@ -140,7 +160,8 @@ export async function pullServerLedger() {
     lineTotal: num(r.line_total),
     batchId: r.batch_id ? String(r.batch_id) : null,
     expenseType: String(r.expense_type ?? ''),
-    itemName: String(r.item_name ?? r.description ?? '')
+    itemName: String(r.item_name ?? r.description ?? ''),
+    supplierId: r.supplier_id ? String(r.supplier_id) : null
   }));
   const sales = ((sRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
     id: String(r.id),
@@ -150,7 +171,8 @@ export async function pullServerLedger() {
     weightKg: num(r.weight_kg),
     pricePerKg: num(r.price_per_kg),
     gross: num(r.gross),
-    batchId: r.batch_id ? String(r.batch_id) : null
+    batchId: r.batch_id ? String(r.batch_id) : null,
+    customerId: r.customer_id ? String(r.customer_id) : null
   }));
 
   const operations: {
@@ -162,6 +184,10 @@ export async function pullServerLedger() {
     weightRecords: WeightRecord[];
     healthRecords: HealthRecord[];
     monitoringSchemaReady: boolean;
+    customers: Customer[];
+    suppliers: Supplier[];
+    salePayments: SalePayment[];
+    businessSchemaReady: boolean;
   } = missingOperationsSchema ? {
     schemaReady: false,
     populationMovements: [],
@@ -170,7 +196,11 @@ export async function pullServerLedger() {
     feedConsumption: [],
     weightRecords: [],
     healthRecords: [],
-    monitoringSchemaReady: !missingMonitoringSchema
+    monitoringSchemaReady: !missingMonitoringSchema,
+    customers: [],
+    suppliers: [],
+    salePayments: [],
+    businessSchemaReady: false
   } : {
     schemaReady: true,
     populationMovements: (populationResult.data ?? []).map((r) => ({
@@ -208,7 +238,24 @@ export async function pullServerLedger() {
       expenseId: r.expense_id ? String(r.expense_id) : null,
       nextDueDate: r.next_due_date ? String(r.next_due_date) : null, notes: String(r.notes ?? '')
     })),
-    monitoringSchemaReady: !missingMonitoringSchema
+    monitoringSchemaReady: !missingMonitoringSchema,
+    customers: missingBusinessSchema ? [] : (customerResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), name: String(r.name),
+      phone: String(r.phone ?? ''), email: String(r.email ?? ''), address: String(r.address ?? ''),
+      notes: String(r.notes ?? ''), isActive: Boolean(r.is_active), createdAt: String(r.created_at ?? '')
+    })),
+    suppliers: missingBusinessSchema ? [] : (supplierResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), name: String(r.name),
+      phone: String(r.phone ?? ''), email: String(r.email ?? ''), address: String(r.address ?? ''),
+      notes: String(r.notes ?? ''), isActive: Boolean(r.is_active), createdAt: String(r.created_at ?? '')
+    })),
+    salePayments: missingBusinessSchema ? [] : (paymentResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), saleId: String(r.sale_id),
+      paymentDate: String(r.payment_date), amount: num(r.amount),
+      paymentMethod: String(r.payment_method) as SalePayment['paymentMethod'],
+      reference: String(r.reference ?? ''), notes: String(r.notes ?? '')
+    })),
+    businessSchemaReady: !missingBusinessSchema
   };
   return replaceLocalWithServer(farm, expenses, sales, batches, operations);
 }
