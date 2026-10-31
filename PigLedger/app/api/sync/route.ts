@@ -4,6 +4,13 @@ import { num, round2, today } from '@/lib/format';
 import { createClient, supabaseConfigured } from '@/lib/supabase/server';
 import type { PendingOp } from '@/lib/local-store';
 
+async function stableRecordId(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(`pig-ledger:${value}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const hex = Array.from(new Uint8Array(digest).slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 function str(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback;
 }
@@ -87,7 +94,8 @@ export async function POST(req: Request) {
         }
         const qty = num(expense.qty);
         const price = num(expense.price);
-        const result = await sb.from('expenses').insert({
+        const result = await sb.from('expenses').upsert({
+          id: await stableRecordId(expense.id),
           farm_id: farm.id,
           user_id: user.id,
           date: expense.date || today(),
@@ -101,13 +109,12 @@ export async function POST(req: Request) {
           price,
           kg_per_unit: Math.max(0, num(expense.kgPerUnit)),
           line_total: round2(qty * price)
-        });
+        }, { onConflict: 'id', ignoreDuplicates: true });
         error = result.error;
       } else if (op.kind === 'delete-expense') {
-        if (!String(op.id).startsWith('local-')) {
-          const result = await sb.from('expenses').delete().eq('id', op.id).eq('user_id', user.id);
-          error = result.error;
-        }
+        const deleteId = String(op.id).startsWith('local-') ? await stableRecordId(op.id) : op.id;
+        const result = await sb.from('expenses').delete().eq('id', deleteId).eq('user_id', user.id);
+        error = result.error;
       } else if (op.kind === 'add-sale') {
         const sale = op.sale;
         const batchId = sale.batchId || null;
@@ -117,7 +124,8 @@ export async function POST(req: Request) {
         }
         const weightKg = num(sale.weightKg);
         const pricePerKg = num(sale.pricePerKg);
-        const result = await sb.from('sales').insert({
+        const result = await sb.from('sales').upsert({
+          id: await stableRecordId(sale.id),
           farm_id: farm.id,
           user_id: user.id,
           date: sale.date || today(),
@@ -127,19 +135,23 @@ export async function POST(req: Request) {
           price_per_kg: pricePerKg,
           gross: round2(weightKg * pricePerKg),
           batch_id: batchId
-        });
+        }, { onConflict: 'id', ignoreDuplicates: true });
         error = result.error;
       } else if (op.kind === 'delete-sale') {
-        if (!String(op.id).startsWith('local-')) {
-          const result = await sb.from('sales').delete().eq('id', op.id).eq('user_id', user.id);
-          error = result.error;
-        }
+        const deleteId = String(op.id).startsWith('local-') ? await stableRecordId(op.id) : op.id;
+        const result = await sb.from('sales').delete().eq('id', deleteId).eq('user_id', user.id);
+        error = result.error;
       } else if (op.kind === 'update-farm') {
         const result = await sb.from('farms').update({
           name: str(op.farm.name, farm.name),
           pig_count: Math.max(0, Math.round(num(op.farm.pigCount)))
         }).eq('id', farm.id).eq('user_id', user.id);
         error = result.error;
+      }
+
+      if (!['add-batch', 'update-batch', 'add-expense', 'delete-expense', 'add-sale', 'delete-sale', 'update-farm'].includes((op as { kind?: string }).kind ?? '')) {
+        failure = 'Unsupported sync operation. The record was kept in the local queue.';
+        break;
       }
 
       if (error) {
@@ -154,10 +166,10 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({
-    ok: true,
+    ok: !failure,
     applied,
     total: ops.length,
     completedOps: applied,
     warning: failure || null
-  });
+  }, { status: failure ? 207 : 200 });
 }
