@@ -3,6 +3,9 @@
 -- Inventory is movement-based: purchases/adjustments are stock-in; consumption/waste are stock-out.
 -- Sales remain in the sales ledger and must not be counted again as population movements.
 
+-- Required as the referenced key for farm-consistent foreign keys.
+create unique index if not exists batches_id_farm_unique on public.batches(id, farm_id);
+
 create table if not exists public.population_movements (
   id uuid primary key default gen_random_uuid(),
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -68,9 +71,6 @@ create table if not exists public.feed_consumption (
     on delete restrict
 );
 
--- Composite unique keys support farm-consistent foreign keys.
-create unique index if not exists batches_id_farm_unique on public.batches(id, farm_id);
-
 create index if not exists population_movements_batch_date_idx
   on public.population_movements(batch_id, movement_date desc);
 create index if not exists population_movements_farm_date_idx
@@ -93,20 +93,20 @@ drop policy if exists population_movements_farm_owner on public.population_movem
 create policy population_movements_farm_owner on public.population_movements
   for all to authenticated
   using (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = farm_id and f.user_id = (select auth.uid())
+    select 1 from public.farms f where f.id = population_movements.farm_id and f.user_id = (select auth.uid())
   ))
   with check (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = farm_id and f.user_id = (select auth.uid())
+    select 1 from public.farms f where f.id = feed_products.farm_id and f.user_id = (select auth.uid())
   ));
 
 drop policy if exists feed_products_farm_owner on public.feed_products;
 create policy feed_products_farm_owner on public.feed_products
   for all to authenticated
   using (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = farm_id and f.user_id = (select auth.uid())
+    select 1 from public.farms f where f.id = feed_inventory_movements.farm_id and f.user_id = (select auth.uid())
   ))
   with check (user_id = (select auth.uid()) and exists (
-    select 1 from public.farms f where f.id = farm_id and f.user_id = (select auth.uid())
+    select 1 from public.farms f where f.id = feed_consumption.farm_id and f.user_id = (select auth.uid())
   ));
 
 drop policy if exists feed_inventory_farm_owner on public.feed_inventory_movements;
