@@ -48,13 +48,41 @@ export default function SalesClient() {
     syncLedgerNow().then(setLedger).catch(() => {});
   }
 
+  async function handleEdit(formData: FormData) {
+    const id = String(formData.get('id') || '');
+    const local = await loadLocalLedger();
+    const current = local.sales.find((item) => item.id === id);
+    if (!current) return;
+    const weight = Math.max(0, num(formData.get('weightKg')));
+    const price = Math.max(0, num(formData.get('pricePerKg')));
+    const updated: Sale = {
+      ...current,
+      date: String(formData.get('date') || current.date),
+      buyer: String(formData.get('buyer') || '').trim(),
+      heads: Math.max(0, Math.floor(num(formData.get('heads')))),
+      weightKg: weight,
+      pricePerKg: price,
+      gross: round2(weight * price),
+      batchId: String(formData.get('batchId') || '') || null
+    };
+    local.sales = local.sales.map((item) => item.id === id ? updated : item);
+    const addIndex = local.pending.findIndex((op) => op.kind === 'add-sale' && op.sale.id === id);
+    const updateIndex = local.pending.findIndex((op) => op.kind === 'update-sale' && op.sale.id === id);
+    if (addIndex >= 0) local.pending[addIndex] = { kind: 'add-sale', sale: updated };
+    else if (updateIndex >= 0) local.pending[updateIndex] = { kind: 'update-sale', sale: updated };
+    else local.pending = [...local.pending, { kind: 'update-sale', sale: updated }];
+    await saveLocalLedger(local);
+    setLedger({ ...local });
+    syncLedgerNow().then(setLedger).catch(() => {});
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('Delete this sale record? This action cannot be undone.')) return;
     const local = await loadLocalLedger();
     local.sales = local.sales.filter((s) => s.id !== id);
     const addIndex = local.pending.findIndex((op) => op.kind === 'add-sale' && op.sale.id === id);
     if (addIndex >= 0) {
-      local.pending = local.pending.filter((op) => !(op.kind === 'add-sale' && op.sale.id === id));
+      local.pending = local.pending.filter((op) => !((op.kind === 'add-sale' || op.kind === 'update-sale') && op.sale.id === id));
     } else {
       local.pending = [...local.pending, { kind: 'delete-sale', id }];
     }
@@ -158,6 +186,23 @@ export default function SalesClient() {
                 <p className="mt-1.5 text-xs tabular-nums text-slate-500">
                   {s.weightKg} kg × {fmt(s.pricePerKg)} · Net proceeds {fmt(net)}
                 </p>
+                <details className="mt-3 border-t border-slate-100 pt-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-600">Edit sale</summary>
+                  <form action={handleEdit} className="mt-3 space-y-3">
+                    <input type="hidden" name="id" value={s.id} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Date</span><input className="input" type="date" name="date" defaultValue={s.date} required /></label>
+                      <label><span className="label">Buyer</span><input className="input" name="buyer" defaultValue={s.buyer} /></label>
+                    </div>
+                    <label className="block"><span className="label">Batch</span><select className="input" name="batchId" defaultValue={s.batchId || ''}><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Number of pigs</span><input className="input" type="number" min="0" step="1" name="heads" defaultValue={s.heads} required /></label>
+                      <label><span className="label">Total weight (kg)</span><input className="input" type="number" min="0" step="any" name="weightKg" defaultValue={s.weightKg} required /></label>
+                    </div>
+                    <label className="block"><span className="label">Price per kg (₱)</span><input className="input" type="number" min="0" step="0.01" name="pricePerKg" defaultValue={s.pricePerKg} required /></label>
+                    <button type="submit" className="btn-primary w-full">Save changes</button>
+                  </form>
+                </details>
                 <div className="mt-2 flex justify-end">
                   <button type="button" onClick={() => handleDelete(s.id)} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-rose-600">
                     Delete
