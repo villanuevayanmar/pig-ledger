@@ -213,13 +213,46 @@ export default function ExpensesClient() {
     syncLedgerNow().then(setLedger).catch(() => {});
   }
 
+  async function handleEdit(formData: FormData) {
+    const id = String(formData.get('id') || '');
+    const local = await loadLocalLedger();
+    const current = local.expenses.find((item) => item.id === id);
+    if (!current) return;
+    const qty = Math.max(0, num(formData.get('qty')));
+    const price = Math.max(0, num(formData.get('price')));
+    const description = String(formData.get('description') || '').trim();
+    const updated: Expense = {
+      ...current,
+      date: String(formData.get('date') || current.date),
+      category: String(formData.get('category') || current.category),
+      description,
+      itemName: description,
+      qty,
+      unit: String(formData.get('unit') || current.unit),
+      price,
+      kgPerUnit: Math.max(0, num(formData.get('kgPerUnit'))),
+      lineTotal: round2(qty * price),
+      batchId: String(formData.get('batchId') || '') || null,
+      expenseType: String(formData.get('expenseType') || current.expenseType || 'other')
+    };
+    local.expenses = local.expenses.map((item) => item.id === id ? updated : item);
+    const addIndex = local.pending.findIndex((op) => op.kind === 'add-expense' && op.expense.id === id);
+    const updateIndex = local.pending.findIndex((op) => op.kind === 'update-expense' && op.expense.id === id);
+    if (addIndex >= 0) local.pending[addIndex] = { kind: 'add-expense', expense: updated };
+    else if (updateIndex >= 0) local.pending[updateIndex] = { kind: 'update-expense', expense: updated };
+    else local.pending = [...local.pending, { kind: 'update-expense', expense: updated }];
+    await saveLocalLedger(local);
+    setLedger({ ...local });
+    syncLedgerNow().then(setLedger).catch(() => {});
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('Delete this expense record? This action cannot be undone.')) return;
     const local = await loadLocalLedger();
     local.expenses = local.expenses.filter((e) => e.id !== id);
     const addIndex = local.pending.findIndex((op) => op.kind === 'add-expense' && op.expense.id === id);
     if (addIndex >= 0) {
-      local.pending = local.pending.filter((op) => !(op.kind === 'add-expense' && op.expense.id === id));
+      local.pending = local.pending.filter((op) => !((op.kind === 'add-expense' || op.kind === 'update-expense') && op.expense.id === id));
     } else {
       local.pending = [...local.pending, { kind: 'delete-expense', id }];
     }
@@ -364,6 +397,30 @@ export default function ExpensesClient() {
                     total is {fmt(e.lineTotal)}.
                   </p>
                 ) : null}
+                <details className="mt-3 border-t border-slate-100 pt-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-600">Edit expense</summary>
+                  <form action={handleEdit} className="mt-3 space-y-3">
+                    <input type="hidden" name="id" value={e.id} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Date</span><input className="input" type="date" name="date" defaultValue={e.date} required /></label>
+                      <label><span className="label">Category</span><select className="input" name="category" defaultValue={e.category}>{CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                    </div>
+                    <label className="block"><span className="label">Description</span><input className="input" name="description" defaultValue={e.description} required /></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Quantity</span><input className="input" type="number" min="0" step="any" name="qty" defaultValue={e.qty} required /></label>
+                      <label><span className="label">Unit</span><select className="input" name="unit" defaultValue={e.unit}>{UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Unit price (₱)</span><input className="input" type="number" min="0" step="0.01" name="price" defaultValue={e.price} required /></label>
+                      <label><span className="label">Kg per unit</span><input className="input" type="number" min="0" step="any" name="kgPerUnit" defaultValue={e.kgPerUnit ?? 0} /></label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Expense type</span><select className="input" name="expenseType" defaultValue={e.expenseType || 'other'}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="electricity">Electricity</option><option value="other">Other</option></select></label>
+                      <label><span className="label">Batch</span><select className="input" name="batchId" defaultValue={e.batchId || ''}><option value="">Farm-wide</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
+                    </div>
+                    <button type="submit" className="btn-primary w-full">Save changes</button>
+                  </form>
+                </details>
                 <div className="mt-2 flex justify-end">
                   <button type="button" onClick={() => handleDelete(e.id)} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-rose-600">
                     Delete
