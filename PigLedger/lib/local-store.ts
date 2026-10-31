@@ -1,4 +1,4 @@
-import type { Batch, Expense, Farm, Sale, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord, WeightRecord, HealthRecord } from './types';
+import type { Batch, Expense, Farm, Sale, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord, WeightRecord, HealthRecord, Customer, Supplier, SalePayment } from './types';
 import { createBrowserClientApp } from './supabase/client';
 
 export type PendingOp =
@@ -16,7 +16,10 @@ export type PendingOp =
   | { kind: 'add-feed-inventory'; movement: FeedInventoryMovement }
   | { kind: 'add-feed-consumption'; consumption: FeedConsumptionRecord }
   | { kind: 'add-weight-record'; record: WeightRecord }
-  | { kind: 'add-health-record'; record: HealthRecord };
+  | { kind: 'add-health-record'; record: HealthRecord }
+  | { kind: 'add-customer'; customer: Customer }
+  | { kind: 'add-supplier'; supplier: Supplier }
+  | { kind: 'add-sale-payment'; payment: SalePayment };
 
 export type LocalLedger = {
   farm: Farm;
@@ -29,10 +32,14 @@ export type LocalLedger = {
   feedConsumption: FeedConsumptionRecord[];
   weightRecords: WeightRecord[];
   healthRecords: HealthRecord[];
+  customers: Customer[];
+  suppliers: Supplier[];
+  salePayments: SalePayment[];
   pending: PendingOp[];
   syncError?: string | null;
   operationsSchemaReady?: boolean;
   monitoringSchemaReady?: boolean;
+  businessSchemaReady?: boolean;
   updatedAt: string;
 };
 
@@ -81,10 +88,14 @@ export function defaultLedger(): LocalLedger {
     feedConsumption: [],
     weightRecords: [],
     healthRecords: [],
+    customers: [],
+    suppliers: [],
+    salePayments: [],
     pending: [],
     syncError: null,
     operationsSchemaReady: false,
     monitoringSchemaReady: false,
+    businessSchemaReady: false,
     updatedAt: new Date().toISOString()
   };
 }
@@ -151,10 +162,14 @@ export async function loadLocalLedger(): Promise<LocalLedger> {
         feedConsumption: Array.isArray(saved.feedConsumption) ? saved.feedConsumption : [],
         weightRecords: Array.isArray(saved.weightRecords) ? saved.weightRecords : [],
         healthRecords: Array.isArray(saved.healthRecords) ? saved.healthRecords : [],
+        customers: Array.isArray(saved.customers) ? saved.customers : [],
+        suppliers: Array.isArray(saved.suppliers) ? saved.suppliers : [],
+        salePayments: Array.isArray(saved.salePayments) ? saved.salePayments : [],
         pending: Array.isArray(saved.pending) ? saved.pending : [],
         syncError: typeof saved.syncError === 'string' ? saved.syncError : null,
         operationsSchemaReady: saved.operationsSchemaReady === true,
         monitoringSchemaReady: saved.monitoringSchemaReady === true,
+        businessSchemaReady: saved.businessSchemaReady === true,
         updatedAt: saved.updatedAt ?? new Date().toISOString()
       };
   }
@@ -187,6 +202,10 @@ export async function replaceLocalWithServer(
     healthRecords: HealthRecord[];
     schemaReady: boolean;
     monitoringSchemaReady: boolean;
+    customers: Customer[];
+    suppliers: Supplier[];
+    salePayments: SalePayment[];
+    businessSchemaReady: boolean;
   }
 ): Promise<LocalLedger> {
   let local = await loadLocalLedger();
@@ -228,6 +247,10 @@ export async function replaceLocalWithServer(
     feedConsumption: mergeById(local.feedConsumption ?? [], operations?.feedConsumption ?? []),
     weightRecords: mergeById(local.weightRecords ?? [], operations?.weightRecords ?? []),
     healthRecords: mergeById(local.healthRecords ?? [], operations?.healthRecords ?? []),
+    customers: mergeById(local.customers ?? [], operations?.customers ?? []),
+    suppliers: mergeById(local.suppliers ?? [], operations?.suppliers ?? []),
+    salePayments: mergeById(local.salePayments ?? [], operations?.salePayments ?? []),
+    businessSchemaReady: operations?.businessSchemaReady ?? local.businessSchemaReady ?? false,
     operationsSchemaReady: operations?.schemaReady ?? local.operationsSchemaReady ?? false,
     monitoringSchemaReady: operations?.monitoringSchemaReady ?? local.monitoringSchemaReady ?? false,
     pending: local.pending,
