@@ -1,32 +1,40 @@
-/* Pig Farm Ledger offline shell — cache-first for pages, network for API/Supabase. */
-const CACHE = 'pigledger-v1';
-const CORE = ['/', '/expenses', '/sales', '/settings', '/manifest.webmanifest'];
+/* Cache only public static assets. Authenticated HTML and data stay out of Cache Storage. */
+const CACHE = 'pigledger-static-v2';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(CORE)).then(() => self.skipWaiting()).catch(() => {})
-  );
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith('pigledger-') && key !== CACHE).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  // Never cache API or Supabase — always try network, fall back to cache for pages.
-  if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase.co')) return;
+  const request = event.request;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/') || request.mode === 'navigate') return;
+
+  const isStaticAsset = ['script', 'style', 'image', 'font'].includes(request.destination)
+    || url.pathname === '/manifest.webmanifest';
+  if (!isStaticAsset) return;
+
   event.respondWith(
-    fetch(req)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
-        return res;
-      })
-      .catch(() => caches.match(req).then((hit) => hit || caches.match('/')))
+    caches.open(CACHE).then(async (cache) => {
+      const cached = await cache.match(request);
+      if (cached) return cached;
+
+      const response = await fetch(request);
+      if (response.ok && response.type === 'basic') {
+        await cache.put(request, response.clone());
+      }
+      return response;
+    })
   );
 });
