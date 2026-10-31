@@ -53,7 +53,12 @@ export default function SalesClient() {
     if (!confirm('Delete this sale record? This action cannot be undone.')) return;
     const local = await loadLocalLedger();
     local.sales = local.sales.filter((s) => s.id !== id);
-    local.pending = [...local.pending, { kind: 'delete-sale', id }];
+    const addIndex = local.pending.findIndex((op) => op.kind === 'add-sale' && op.sale.id === id);
+    if (addIndex >= 0) {
+      local.pending = local.pending.filter((op) => !(op.kind === 'add-sale' && op.sale.id === id));
+    } else {
+      local.pending = [...local.pending, { kind: 'delete-sale', id }];
+    }
     await saveLocalLedger(local);
     setLedger({ ...local });
     syncLedgerNow().then(setLedger).catch(() => {});
