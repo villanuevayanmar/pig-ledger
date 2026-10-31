@@ -519,3 +519,94 @@ comment on function public.record_population_movement(uuid, uuid, uuid, date, te
   'Idempotently records batch population changes after locking the batch and checking current head count.';
 comment on function public.validate_batch_sale_population() is
   'Prevents batch-linked sales from reducing the recorded batch population below zero.';
+
+-- Safe stock-out corrections share the same per-product lock as feed consumption.
+create or replace function public.record_feed_stock_out(
+  p_id uuid,
+  p_farm_id uuid,
+  p_product_id uuid,
+  p_movement_date date,
+  p_movement_type text,
+  p_quantity_units numeric,
+  p_kg_per_unit_snapshot numeric,
+  p_notes text default ''
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_stock_kg numeric := 0;
+  v_required_kg numeric := 0;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+  if p_movement_type not in ('adjustment_out', 'waste') then
+    raise exception 'Stock-out movement type is invalid';
+  end if;
+  if p_quantity_units is null or p_quantity_units <= 0
+     or p_kg_per_unit_snapshot is null or p_kg_per_unit_snapshot <= 0 then
+    raise exception 'Quantity and kilograms per unit must be greater than zero';
+  end if;
+
+  perform 1 from public.feed_products fp
+  where fp.id = p_product_id
+    and fp.farm_id = p_farm_id
+    and fp.user_id = (select auth.uid())
+    and fp.is_active
+  for update;
+  if not found then
+    raise exception 'Feed product not found or inactive';
+  end if;
+
+  if exists (
+    select 1 from public.feed_inventory_movements im
+    where im.id = p_id and im.user_id = (select auth.uid())
+  ) then
+    return p_id;
+  end if;
+
+  select coalesce(sum(
+    case
+      when im.movement_type in ('purchase', 'adjustment_in')
+        then im.quantity_units * im.kg_per_unit_snapshot
+      when im.movement_type in ('adjustment_out', 'waste')
+        then -im.quantity_units * im.kg_per_unit_snapshot
+      else 0
+    end
+  ), 0)
+  into v_stock_kg
+  from public.feed_inventory_movements im
+  where im.product_id = p_product_id and im.farm_id = p_farm_id;
+
+  select v_stock_kg - coalesce(sum(fc.quantity_units * fc.kg_per_unit_snapshot), 0)
+    into v_stock_kg
+  from public.feed_consumption fc
+  where fc.product_id = p_product_id and fc.farm_id = p_farm_id;
+
+  v_required_kg := p_quantity_units * p_kg_per_unit_snapshot;
+  if v_stock_kg + 0.000001 < v_required_kg then
+    raise exception 'Insufficient feed stock. Available: % kg; requested: % kg',
+      round(v_stock_kg, 2), round(v_required_kg, 2);
+  end if;
+
+  insert into public.feed_inventory_movements (
+    id, farm_id, product_id, user_id, movement_date, movement_type,
+    quantity_units, kg_per_unit_snapshot, unit_cost, notes
+  ) values (
+    p_id, p_farm_id, p_product_id, (select auth.uid()),
+    coalesce(p_movement_date, current_date), p_movement_type,
+    p_quantity_units, p_kg_per_unit_snapshot, 0, coalesce(p_notes, '')
+  );
+
+  return p_id;
+end;
+$$;
+
+grant execute on function public.record_feed_stock_out(uuid, uuid, uuid, date, text, numeric, numeric, text)
+  to authenticated;
+
+comment on function public.record_feed_stock_out(uuid, uuid, uuid, date, text, numeric, numeric, text) is
+  'Records stock reductions or feed waste only when sufficient product stock remains, with per-product locking.';
