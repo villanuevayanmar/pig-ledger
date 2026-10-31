@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import SyncStatus from '@/components/SyncStatus';
 import { fmt, fmtKg, num, round2, today } from '@/lib/format';
@@ -257,7 +258,7 @@ export default function OperationsClient() {
       <section className="card space-y-3">
         <div>
           <h3 className="font-semibold">Pig population by batch</h3>
-          <p className="text-xs text-slate-500">Sales are deducted automatically. Do not enter a second sale movement here.</p>
+          <p className="text-xs text-slate-500">Batch-linked sales are deducted automatically. Assign sales to a batch in Transactions; unassigned sales do not reduce a batch count.</p>
         </div>
         {batchPopulation.length === 0 ? <p className="muted">Create a batch before recording pig movements.</p> : (
           <div className="space-y-2">
