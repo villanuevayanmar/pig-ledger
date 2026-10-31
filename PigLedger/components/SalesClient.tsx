@@ -21,7 +21,6 @@ export default function SalesClient() {
   const [pricePerKg, setPricePerKg] = useState('');
 
   useEffect(() => {
-    loadLocalLedger().then(setLedger);
     syncLedgerNow().then(setLedger).catch(() => {});
   }, []);
 
