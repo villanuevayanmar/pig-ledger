@@ -64,12 +64,15 @@ export default function SyncStatus({
 
   if (!online) {
     return (
+      <div className="space-y-2">
       <div className="flex items-start justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
         <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
         <span>
           Offline — entries are stored on this device
           {pending > 0 ? ` (${pending} pending)` : ''} and synchronize when connectivity returns.
         </span>
+      </div>
+      {syncError ? <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">{syncError}</p> : null}
       </div>
     );
   }
