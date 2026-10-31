@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createBrowserClientApp } from '@/lib/supabase/client';
 import { loadLocalLedger, setActiveFarmScope } from '@/lib/local-store';
 
@@ -104,7 +104,7 @@ export default function FarmSwitcher() {
     window.location.reload();
   }
 
-  async function createFarm(event: React.FormEvent<HTMLFormElement>) {
+  async function createFarm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = farmName.trim();
     if (!name || !userId) return;
