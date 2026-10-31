@@ -33,7 +33,7 @@ export default function SyncStatus({
     setSyncing(true);
     try {
       await onSync();
-      setLastSync(new Date().toLocaleTimeString());
+      if (pending === 0) setLastSync(new Date().toLocaleTimeString());
     } finally {
       setSyncing(false);
     }
