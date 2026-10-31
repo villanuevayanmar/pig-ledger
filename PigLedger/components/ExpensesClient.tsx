@@ -23,32 +23,41 @@ export async function pullServerLedger() {
   const uid = authData.user?.id;
   if (!uid) return null; // Not signed in — keep the local copy only.
 
-  let { data: farms } = await sb
+  const { data: visibleFarms, error: farmReadError } = await sb
     .from('farms')
-    .select('id, name, pig_count, start_date')
-    .eq('user_id', uid)
-    .order('created_at', { ascending: true })
-    .limit(1);
+    .select('id, name, pig_count, start_date, user_id, created_at')
+    .order('created_at', { ascending: true });
+  if (farmReadError) throw new Error('Could not load farms: ' + farmReadError.message);
 
-  if (!farms || farms.length === 0) {
-    // One-time migration: claim a legacy farm that has no owner yet.
-    const { data: orphans } = await sb
-      .from('farms')
-      .select('id, name, pig_count, start_date')
-      .is('user_id', null)
-      .order('created_at', { ascending: true })
-      .limit(1);
-    if (orphans && orphans.length > 0) {
-      const { data: claimed } = await sb
+  // Rows with a null owner are legacy records; claim one only when there is
+  // no already-owned or membership-visible farm to use.
+  let farms = (visibleFarms ?? []).filter((item) => Boolean(item.user_id));
+  if (farms.length === 0) {
+    const orphan = (visibleFarms ?? []).find((item) => !item.user_id);
+    if (orphan) {
+      const { data: claimed, error: claimError } = await sb
         .from('farms')
         .update({ user_id: uid })
-        .eq('id', orphans[0].id)
-        .select('id');
-      if (claimed && claimed.length > 0) farms = [orphans[0]];
+        .eq('id', orphan.id)
+        .select('id, name, pig_count, start_date, user_id, created_at')
+        .maybeSingle();
+      if (!claimError && claimed) farms = [claimed];
     }
   }
-  if (!farms || farms.length === 0) return null;
-  const f = farms[0] as { id: string; name: string; pig_count: number; start_date: string };
+
+  if (farms.length === 0) {
+    const { data: created, error: createError } = await sb
+      .from('farms')
+      .insert({ name: 'My Piggery', pig_count: 0, user_id: uid })
+      .select('id, name, pig_count, start_date, user_id, created_at')
+      .single();
+    if (createError) throw new Error('Could not create farm: ' + createError.message);
+    farms = [created];
+  }
+
+  const activeFarmId = window.localStorage.getItem('pig-ledger-active-farm:' + uid);
+  const f = (activeFarmId ? farms.find((item) => item.id === activeFarmId) : null) ?? farms[0];
+
   const farm = {
     id: f.id,
     name: f.name || 'My Piggery',
@@ -59,7 +68,6 @@ export async function pullServerLedger() {
     .from('batches')
     .select('id, farm_id, name, start_date, target_sale_date, initial_heads, status, projection, created_at, deleted_at')
     .eq('farm_id', farm.id)
-    .eq('user_id', uid)
     .is('deleted_at', null)
     .order('start_date', { ascending: false });
   if (batchReadError) throw new Error('Could not refresh batches.');
@@ -298,7 +306,7 @@ async function performSyncLedgerNow(): Promise<LocalLedger> {
       const res = await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ops: local.pending })
+        body: JSON.stringify({ farmId: local.farm.id !== 'local-farm' ? local.farm.id : null, ops: local.pending })
       });
       const json = await res.json();
       const completed = Number.isInteger(json?.completedOps)
