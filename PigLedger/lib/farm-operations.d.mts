@@ -7,11 +7,12 @@ export function calculatePopulation(movements?: PopulationMovement[], sales?: Po
 };
 export type FeedMovement = {
   movementType: 'purchase' | 'adjustment_in' | 'adjustment_out' | 'waste';
-  quantityUnits: number; kgPerUnitSnapshot: number;
+  productId?: string; quantityUnits: number; kgPerUnitSnapshot: number;
 };
-export type FeedConsumption = { quantityUnits: number; kgPerUnitSnapshot: number };
+export type FeedConsumption = { productId?: string; quantityUnits: number; kgPerUnitSnapshot: number };
 export function calculateFeedStock(inventoryMovements?: FeedMovement[], consumption?: FeedConsumption[]): {
   purchasedKg: number; consumedKg: number; stockKg: number; hasNegativeStock: boolean;
+  products: Array<{ productId: string; purchasedKg: number; consumedKg: number; stockKg: number; hasNegativeStock: boolean }>;
 };
 export function calculateGrowthMetrics(input: {
   startWeightKg: number; endWeightKg: number; days: number; consumedFeedKg: number;
