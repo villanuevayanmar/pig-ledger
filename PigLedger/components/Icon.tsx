@@ -68,6 +68,11 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M6 21v-4h4" />
     </>
   ),
+  activity: (
+    <>
+      <path d="M3 12h4l3-8 4 16 3-8h4" />
+    </>
+  ),
   building: (
     <>
       <rect x="4" y="3" width="16" height="18" rx="1" />
