@@ -17,3 +17,19 @@ export function calculateFeedStock(inventoryMovements?: FeedMovement[], consumpt
 export function calculateGrowthMetrics(input: {
   startWeightKg: number; endWeightKg: number; days: number; consumedFeedKg: number;
 }): { gainKg: number; averageDailyGainKg: number | null; fcr: number | null };
+
+export function calculateBatchGrowthMetrics(input: {
+  startAverageWeightKg: number;
+  endAverageWeightKg: number;
+  startHeadCount: number;
+  endHeadCount: number;
+  days: number;
+  consumedFeedKg: number;
+  populationChanged?: boolean;
+}): {
+  gainPerHeadKg: number;
+  averageDailyGainKg: number | null;
+  totalGainKg: number | null;
+  fcr: number | null;
+  fcrEligible: boolean;
+};
