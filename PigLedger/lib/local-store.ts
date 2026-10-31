@@ -35,7 +35,8 @@ async function scopedKey(): Promise<string> {
   }
   if (!userId) throw new Error('Your account could not be identified. Sign in again before opening offline records.');
 
-  const key = 'ledger-v2:' + userId;
+  const farmId = typeof window !== 'undefined' ? window.localStorage.getItem('pig-ledger-active-farm:' + userId) : null;
+  const key = 'ledger-v2:' + userId + ':' + (farmId || 'default');
   const existing = await idbGet(key);
   if (!existing) {
     const lastOwner = typeof window !== 'undefined' ? window.localStorage.getItem(OWNER_KEY) : null;
@@ -128,6 +129,13 @@ export async function loadLocalLedger(): Promise<LocalLedger> {
   return defaultLedger();
 }
 
+export function setActiveFarmScope(farmId: string): void {
+  if (typeof window === 'undefined') return;
+  const userId = window.localStorage.getItem(OWNER_KEY);
+  if (!userId || !farmId) return;
+  window.localStorage.setItem('pig-ledger-active-farm:' + userId, farmId);
+}
+
 export async function saveLocalLedger(ledger: LocalLedger): Promise<void> {
   const key = await scopedKey();
   await idbSet(ledger, key);
@@ -163,6 +171,7 @@ export async function replaceLocalWithServer(
   for (const sale of local.sales) {
     if (pendingSaleIds.has(sale.id) && !mergedSales.some((item) => item.id === sale.id)) mergedSales.unshift(sale);
   }
+  setActiveFarmScope(farm.id);
   const next: LocalLedger = {
     farm,
     batches: mergedBatches,
