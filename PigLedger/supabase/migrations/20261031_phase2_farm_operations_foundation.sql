@@ -315,3 +315,191 @@ grant execute on function public.record_feed_consumption(uuid, uuid, uuid, uuid,
 
 comment on function public.record_feed_consumption(uuid, uuid, uuid, uuid, date, numeric, numeric, text) is
   'Idempotently records actual feed consumption after locking the product and checking stock.';
+
+-- Explicit least-privilege table grants for the authenticated app.
+grant select, insert on public.population_movements to authenticated;
+grant select, insert, update on public.feed_products to authenticated;
+grant select, insert on public.feed_inventory_movements to authenticated;
+grant select, insert on public.feed_consumption to authenticated;
+
+-- Record population events while holding a batch lock. This serializes
+-- mortality/transfer-out adjustments and sales for the same batch.
+create or replace function public.record_population_movement(
+  p_id uuid,
+  p_farm_id uuid,
+  p_batch_id uuid,
+  p_movement_date date,
+  p_movement_type text,
+  p_heads integer,
+  p_notes text default ''
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_initial_heads integer;
+  v_has_opening boolean;
+  v_population numeric := 0;
+  v_sold numeric := 0;
+  v_current numeric := 0;
+  v_delta numeric := 0;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+  if p_heads is null or p_heads <= 0 then
+    raise exception 'The number of pigs must be a positive whole number';
+  end if;
+  if p_movement_type not in ('purchase', 'mortality', 'transfer_in', 'transfer_out', 'adjustment_in', 'adjustment_out') then
+    raise exception 'Unsupported population movement type';
+  end if;
+
+  if exists (
+    select 1 from public.population_movements pm
+    where pm.id = p_id and pm.user_id = (select auth.uid())
+  ) then
+    return p_id;
+  end if;
+
+  select b.initial_heads
+    into v_initial_heads
+  from public.batches b
+  where b.id = p_batch_id
+    and b.farm_id = p_farm_id
+    and b.user_id = (select auth.uid())
+  for update;
+  if not found then
+    raise exception 'Batch does not belong to this farm';
+  end if;
+
+  select exists (
+    select 1 from public.population_movements pm
+    where pm.batch_id = p_batch_id
+      and pm.farm_id = p_farm_id
+      and pm.movement_type = 'opening'
+  ) into v_has_opening;
+
+  select coalesce(sum(
+    case
+      when pm.movement_type in ('opening', 'purchase', 'transfer_in', 'adjustment_in') then pm.heads
+      when pm.movement_type in ('mortality', 'transfer_out', 'adjustment_out') then -pm.heads
+      else 0
+    end
+  ), 0)
+    into v_population
+  from public.population_movements pm
+  where pm.batch_id = p_batch_id and pm.farm_id = p_farm_id;
+
+  if not v_has_opening then
+    v_population := v_population + v_initial_heads;
+  end if;
+
+  select coalesce(sum(s.heads), 0)
+    into v_sold
+  from public.sales s
+  where s.batch_id = p_batch_id and s.farm_id = p_farm_id;
+
+  v_current := v_population - v_sold;
+  if p_movement_type in ('mortality', 'transfer_out', 'adjustment_out') then
+    v_delta := -p_heads;
+    if p_heads > v_current then
+      raise exception 'This movement exceeds the current recorded batch population (% pigs available)', greatest(v_current, 0);
+    end if;
+  else
+    v_delta := p_heads;
+  end if;
+
+  insert into public.population_movements (
+    id, farm_id, batch_id, user_id, movement_date, movement_type, heads, notes
+  ) values (
+    p_id, p_farm_id, p_batch_id, (select auth.uid()),
+    coalesce(p_movement_date, current_date), p_movement_type, p_heads, coalesce(p_notes, '')
+  );
+
+  return p_id;
+end;
+$$;
+
+grant execute on function public.record_population_movement(uuid, uuid, uuid, date, text, integer, text)
+  to authenticated;
+
+-- Batch-linked sale inserts/edits use the same batch lock as population RPCs,
+-- preventing concurrent transactions from selling or removing more pigs than exist.
+create or replace function public.validate_batch_sale_population()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_initial_heads integer;
+  v_has_opening boolean;
+  v_population numeric := 0;
+  v_other_sales numeric := 0;
+begin
+  if new.batch_id is null then
+    return new;
+  end if;
+  if new.heads is null or new.heads <= 0 then
+    raise exception 'A batch-linked sale must include at least one pig';
+  end if;
+
+  select b.initial_heads
+    into v_initial_heads
+  from public.batches b
+  where b.id = new.batch_id
+    and b.farm_id = new.farm_id
+    and b.user_id = (select auth.uid())
+  for update;
+  if not found then
+    raise exception 'Batch does not belong to this farm';
+  end if;
+
+  select exists (
+    select 1 from public.population_movements pm
+    where pm.batch_id = new.batch_id
+      and pm.farm_id = new.farm_id
+      and pm.movement_type = 'opening'
+  ) into v_has_opening;
+
+  select coalesce(sum(
+    case
+      when pm.movement_type in ('opening', 'purchase', 'transfer_in', 'adjustment_in') then pm.heads
+      when pm.movement_type in ('mortality', 'transfer_out', 'adjustment_out') then -pm.heads
+      else 0
+    end
+  ), 0)
+    into v_population
+  from public.population_movements pm
+  where pm.batch_id = new.batch_id and pm.farm_id = new.farm_id;
+
+  if not v_has_opening then
+    v_population := v_population + v_initial_heads;
+  end if;
+
+  select coalesce(sum(s.heads), 0)
+    into v_other_sales
+  from public.sales s
+  where s.batch_id = new.batch_id
+    and s.farm_id = new.farm_id
+    and s.id <> new.id;
+
+  if new.heads > v_population - v_other_sales then
+    raise exception 'Sale exceeds the current recorded batch population (% pigs available)', greatest(v_population - v_other_sales, 0);
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists validate_batch_sale_population on public.sales;
+create trigger validate_batch_sale_population
+  before insert or update of heads, batch_id, farm_id on public.sales
+  for each row execute function public.validate_batch_sale_population();
+
+comment on function public.record_population_movement(uuid, uuid, uuid, date, text, integer, text) is
+  'Idempotently records batch population changes after locking the batch and checking current head count.';
+comment on function public.validate_batch_sale_population() is
+  'Prevents batch-linked sales from reducing the recorded batch population below zero.';
