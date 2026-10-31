@@ -27,6 +27,7 @@ export type LocalLedger = {
   feedConsumption: FeedConsumptionRecord[];
   pending: PendingOp[];
   syncError?: string | null;
+  operationsSchemaReady?: boolean;
   updatedAt: string;
 };
 
@@ -75,6 +76,7 @@ export function defaultLedger(): LocalLedger {
     feedConsumption: [],
     pending: [],
     syncError: null,
+    operationsSchemaReady: false,
     updatedAt: new Date().toISOString()
   };
 }
@@ -141,6 +143,7 @@ export async function loadLocalLedger(): Promise<LocalLedger> {
         feedConsumption: Array.isArray(saved.feedConsumption) ? saved.feedConsumption : [],
         pending: Array.isArray(saved.pending) ? saved.pending : [],
         syncError: typeof saved.syncError === 'string' ? saved.syncError : null,
+        operationsSchemaReady: saved.operationsSchemaReady === true,
         updatedAt: saved.updatedAt ?? new Date().toISOString()
       };
   }
@@ -169,6 +172,7 @@ export async function replaceLocalWithServer(
     feedProducts: FeedProduct[];
     feedInventoryMovements: FeedInventoryMovement[];
     feedConsumption: FeedConsumptionRecord[];
+    schemaReady: boolean;
   }
 ): Promise<LocalLedger> {
   let local = await loadLocalLedger();
@@ -208,6 +212,7 @@ export async function replaceLocalWithServer(
     feedProducts: mergeById(local.feedProducts ?? [], operations?.feedProducts ?? []),
     feedInventoryMovements: mergeById(local.feedInventoryMovements ?? [], operations?.feedInventoryMovements ?? []),
     feedConsumption: mergeById(local.feedConsumption ?? [], operations?.feedConsumption ?? []),
+    operationsSchemaReady: operations?.schemaReady ?? local.operationsSchemaReady ?? false,
     pending: local.pending,
     syncError: local.syncError ?? null,
     updatedAt: new Date().toISOString()
