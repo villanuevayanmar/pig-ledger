@@ -32,14 +32,13 @@ async function scopedKey(): Promise<string> {
   } catch {
     // The last authenticated owner is used only when the cached auth session cannot be read.
   }
-  if (!userId && typeof window !== 'undefined') userId = window.localStorage.getItem(OWNER_KEY) ?? '';
   if (!userId) throw new Error('Your account could not be identified. Sign in again before opening offline records.');
 
   const key = 'ledger-v2:' + userId;
   const existing = await idbGet(key);
   if (!existing) {
     const lastOwner = typeof window !== 'undefined' ? window.localStorage.getItem(OWNER_KEY) : null;
-    if (!lastOwner || lastOwner === userId) {
+    if (lastOwner === userId) {
       const legacy = await idbGet(LEGACY_KEY);
       if (legacy) await idbSet(legacy, key);
     }
