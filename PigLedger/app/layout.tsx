@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import Nav from '@/components/Nav';
+import FarmSwitcher from '@/components/FarmSwitcher';
 import UserMenu from '@/components/UserMenu';
 import InstallPrompt from '@/components/InstallPrompt';
 import SwRegister from '@/components/SwRegister';
@@ -38,7 +39,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body>
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-4 py-3">
+          <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white">
                 <Icon name="building" className="h-5 w-5" />
@@ -52,7 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </p>
               </div>
             </div>
-            <UserMenu email={email} />
+            <div className="ml-auto flex items-center gap-2"><FarmSwitcher /><UserMenu email={email} /></div>
           </div>
         </header>
 
