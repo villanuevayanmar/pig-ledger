@@ -110,3 +110,53 @@ export type Totals = {
   netBySale: Record<string, number>;
   issueCount: number;
 };
+
+export type PopulationMovementType =
+  | 'opening' | 'purchase' | 'mortality' | 'transfer_in' | 'transfer_out'
+  | 'adjustment_in' | 'adjustment_out';
+
+export type PopulationMovement = {
+  id: string;
+  farmId: string;
+  batchId: string;
+  movementDate: string;
+  movementType: PopulationMovementType;
+  heads: number;
+  notes: string;
+};
+
+export type FeedProduct = {
+  id: string;
+  farmId: string;
+  name: string;
+  category: string;
+  unit: string;
+  kgPerUnit: number;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type FeedInventoryMovementType = 'purchase' | 'adjustment_in' | 'adjustment_out' | 'waste';
+
+export type FeedInventoryMovement = {
+  id: string;
+  farmId: string;
+  productId: string;
+  movementDate: string;
+  movementType: FeedInventoryMovementType;
+  quantityUnits: number;
+  kgPerUnitSnapshot: number;
+  unitCost: number;
+  notes: string;
+};
+
+export type FeedConsumptionRecord = {
+  id: string;
+  farmId: string;
+  batchId: string;
+  productId: string;
+  consumptionDate: string;
+  quantityUnits: number;
+  kgPerUnitSnapshot: number;
+  notes: string;
+};
