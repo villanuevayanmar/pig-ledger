@@ -16,7 +16,7 @@ test('population counts purchases, mortality, transfers and sales once', () => {
 
 test('population flags events that exceed available animals', () => {
   const result = calculatePopulation([{ movementType: 'opening', heads: 2 }], [{ heads: 3 }]);
-  assert.equal(result.currentHeads, 0);
+  assert.equal(result.currentHeads, -1);
   assert.equal(result.hasOverdraw, true);
 });
 
@@ -41,4 +41,12 @@ test('growth metrics calculate ADG and FCR only when valid source data exists', 
   assert.equal(calculateGrowthMetrics({
     startWeightKg: 80, endWeightKg: 80, days: 0, consumedFeedKg: 100
   }).fcr, null);
+});
+
+test('population counts are whole animals and invalid movement types are ignored', () => {
+  const result = calculatePopulation([
+    { movementType: 'opening', heads: 4.9 },
+    { movementType: 'unknown', heads: 100 }
+  ], [{ heads: 1.8 }]);
+  assert.equal(result.currentHeads, 3);
 });
