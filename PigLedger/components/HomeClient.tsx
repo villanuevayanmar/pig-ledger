@@ -30,7 +30,7 @@ export default function HomeClient() {
 
   return (
     <div className="space-y-4">
-      <SyncStatus pending={ledger.pending.length} onSync={async () => setLedger(await syncLedgerNow())} />
+      <SyncStatus pending={ledger.pending.length} syncError={ledger.syncError} onSync={async () => setLedger(await syncLedgerNow())} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
