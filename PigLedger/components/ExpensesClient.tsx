@@ -142,16 +142,18 @@ export async function syncLedgerNow(): Promise<LocalLedger> {
         await saveLocalLedger(local);
       }
       if (!res.ok || json?.ok !== true || local.pending.length > 0) {
-        local.syncError = String(json?.warning || json?.message || 'Some records could not be synchronized. They remain pending.');
-        await saveLocalLedger(local);
-        return local;
+        const latest = await loadLocalLedger();
+        latest.syncError = String(json?.warning || json?.message || 'Some records could not be synchronized. They remain pending.');
+        await saveLocalLedger(latest);
+        return latest;
       }
       local.syncError = null;
       await saveLocalLedger(local);
     } catch {
-      local.syncError = 'Could not reach the sync service. Pending records are still saved on this device.';
-      await saveLocalLedger(local);
-      return local;
+      const latest = await loadLocalLedger();
+      latest.syncError = 'Could not reach the sync service. Pending records are still saved on this device.';
+      await saveLocalLedger(latest);
+      return latest;
     }
   }
   try {
