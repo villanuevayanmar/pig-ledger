@@ -76,7 +76,7 @@ export default function SalesClient() {
 
   return (
     <div className="space-y-4">
-      <SyncStatus pending={ledger.pending.length} onSync={async () => { setLedger(await syncLedgerNow()); }} />
+      <SyncStatus pending={ledger.pending.length} syncError={ledger.syncError} onSync={async () => { setLedger(await syncLedgerNow()); }} />
 
       <div className="flex items-end justify-between gap-3">
         <div>
