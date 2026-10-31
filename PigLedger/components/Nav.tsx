@@ -8,6 +8,7 @@ const TABS = [
   { href: '/', label: 'Overview', icon: 'home' as const },
   { href: '/transactions', label: 'Transactions', icon: 'expenses' as const },
   { href: '/batches', label: 'Batches', icon: 'building' as const },
+  { href: '/operations', label: 'Farm', icon: 'activity' as const },
   { href: '/reports', label: 'Reports', icon: 'sales' as const },
   { href: '/settings', label: 'Settings', icon: 'settings' as const }
 ];
@@ -21,7 +22,7 @@ export default function Nav() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_2px_rgba(15,23,42,0.04)]"
       aria-label="Main navigation"
     >
-      <div className="mx-auto grid w-full max-w-3xl grid-cols-5">
+      <div className="mx-auto grid w-full max-w-3xl grid-cols-6">
         {TABS.map((tab) => {
           const active = tab.href === '/'
             ? pathname === '/'
@@ -29,7 +30,7 @@ export default function Nav() {
               ? ['/transactions', '/expenses', '/sales'].includes(pathname)
               : tab.href === '/batches'
                 ? ['/batches', '/fattening'].includes(pathname)
-                : pathname === tab.href;
+                : tab.href === '/operations' ? pathname === '/operations' : pathname === tab.href;
           return (
             <Link
               key={tab.href}
