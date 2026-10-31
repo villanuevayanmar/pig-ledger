@@ -168,6 +168,13 @@ export async function importAll(payloadJson: string): Promise<{ ok: boolean; mes
   const sb = createClient();
   const user = await requireUser(sb);
   const farm = await ensureFarm(sb);
+  const { data: ownedBatches, error: batchError } = await sb
+    .from('batches')
+    .select('id')
+    .eq('farm_id', farm.id)
+    .eq('user_id', user.id);
+  if (batchError) return { ok: false, message: 'Could not validate backup batch references. No records were changed.' };
+  const batchIds = new Set((ownedBatches ?? []).map((batch) => String(batch.id)));
 
   const expenseRows = await Promise.all(payload.expenses.map(async (e, index) => ({
     id: await backupId(e.id, 'expenses', index),
@@ -178,6 +185,7 @@ export async function importAll(payloadJson: string): Promise<{ ok: boolean; mes
     description: e.description!,
     item_name: e.itemName || e.description || '',
     expense_type: e.expenseType || 'other',
+    batch_id: e.batchId && batchIds.has(e.batchId) ? e.batchId : null,
     qty: e.qty!,
     unit: e.unit || 'Sack',
     price: e.price!,
@@ -193,7 +201,8 @@ export async function importAll(payloadJson: string): Promise<{ ok: boolean; mes
     heads: Math.round(s.heads!),
     weight_kg: s.weightKg!,
     price_per_kg: s.pricePerKg!,
-    gross: s.gross ?? round2(s.weightKg! * s.pricePerKg!)
+    gross: s.gross ?? round2(s.weightKg! * s.pricePerKg!),
+    batch_id: s.batchId && batchIds.has(s.batchId) ? s.batchId : null
   })));
 
   // Merge only: duplicate IDs are skipped and existing records are never deleted or overwritten.
