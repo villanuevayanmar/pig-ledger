@@ -6,6 +6,14 @@ import type { PendingOp } from '@/lib/local-store';
 import { deterministicUuid } from '@/lib/idempotency.mjs';
 
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function stableUuid(value: string): Promise<string> {
+  return isUuid(value) ? value : deterministicUuid(`pig-ledger:${value}`);
+}
+
 function str(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback;
 }
@@ -175,7 +183,7 @@ export async function POST(req: Request) {
           break;
         }
         const result = await sb.from('population_movements').upsert({
-          id: await deterministicUuid(`pig-ledger:${movement.id}`),
+          id: await stableUuid(movement.id),
           farm_id: farm.id,
           batch_id: movement.batchId,
           user_id: user.id,
@@ -208,7 +216,7 @@ export async function POST(req: Request) {
           break;
         }
         const result = await sb.from('feed_inventory_movements').upsert({
-          id: await deterministicUuid(`pig-ledger:${movement.id}`),
+          id: await stableUuid(movement.id),
           farm_id: farm.id,
           product_id: movement.productId,
           user_id: user.id,
@@ -223,7 +231,7 @@ export async function POST(req: Request) {
       } else if (op.kind === 'add-feed-consumption') {
         const consumption = op.consumption;
         const result = await sb.rpc('record_feed_consumption', {
-          p_id: await deterministicUuid(`pig-ledger:${consumption.id}`),
+          p_id: await stableUuid(consumption.id),
           p_farm_id: farm.id,
           p_batch_id: consumption.batchId,
           p_product_id: consumption.productId,
