@@ -88,6 +88,29 @@ export async function pullServerLedger() {
     .eq('user_id', uid)
     .order('date', { ascending: false });
   if (salesReadError) throw new Error('Could not refresh sales.');
+  const [populationResult, productResult, inventoryResult, consumptionResult] = await Promise.all([
+    sb.from('population_movements')
+      .select('id, farm_id, batch_id, movement_date, movement_type, heads, notes')
+      .eq('farm_id', farm.id).eq('user_id', uid).order('movement_date', { ascending: false }),
+    sb.from('feed_products')
+      .select('id, farm_id, name, category, unit, kg_per_unit, is_active, created_at')
+      .eq('farm_id', farm.id).eq('user_id', uid).order('name', { ascending: true }),
+    sb.from('feed_inventory_movements')
+      .select('id, farm_id, product_id, movement_date, movement_type, quantity_units, kg_per_unit_snapshot, unit_cost, notes')
+      .eq('farm_id', farm.id).eq('user_id', uid).order('movement_date', { ascending: false }),
+    sb.from('feed_consumption')
+      .select('id, farm_id, batch_id, product_id, consumption_date, quantity_units, kg_per_unit_snapshot, notes')
+      .eq('farm_id', farm.id).eq('user_id', uid).order('consumption_date', { ascending: false })
+  ]);
+  const operationErrors = [populationResult.error, productResult.error, inventoryResult.error, consumptionResult.error].filter(Boolean);
+  const missingOperationsSchema = operationErrors.some((error) =>
+    error?.code === '42P01' || error?.code === 'PGRST205' ||
+    /could not find the table|relation .* does not exist/i.test(error?.message ?? '')
+  );
+  if (operationErrors.length > 0 && !missingOperationsSchema) {
+    throw new Error('Could not refresh farm operations records.');
+  }
+
   const expenses: Expense[] = ((eRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
     id: String(r.id),
     date: String(r.date ?? ''),
@@ -112,7 +135,39 @@ export async function pullServerLedger() {
     gross: num(r.gross),
     batchId: r.batch_id ? String(r.batch_id) : null
   }));
-  return replaceLocalWithServer(farm, expenses, sales, batches);
+
+  const operations = missingOperationsSchema ? {
+    schemaReady: false,
+    populationMovements: [],
+    feedProducts: [],
+    feedInventoryMovements: [],
+    feedConsumption: []
+  } : {
+    schemaReady: true,
+    populationMovements: (populationResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), batchId: String(r.batch_id),
+      movementDate: String(r.movement_date), movementType: String(r.movement_type),
+      heads: Math.round(num(r.heads)), notes: String(r.notes ?? '')
+    })),
+    feedProducts: (productResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), name: String(r.name),
+      category: String(r.category), unit: String(r.unit), kgPerUnit: num(r.kg_per_unit),
+      isActive: Boolean(r.is_active), createdAt: String(r.created_at ?? '')
+    })),
+    feedInventoryMovements: (inventoryResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), productId: String(r.product_id),
+      movementDate: String(r.movement_date), movementType: String(r.movement_type),
+      quantityUnits: num(r.quantity_units), kgPerUnitSnapshot: num(r.kg_per_unit_snapshot),
+      unitCost: num(r.unit_cost), notes: String(r.notes ?? '')
+    })),
+    feedConsumption: (consumptionResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), batchId: String(r.batch_id),
+      productId: String(r.product_id), consumptionDate: String(r.consumption_date),
+      quantityUnits: num(r.quantity_units), kgPerUnitSnapshot: num(r.kg_per_unit_snapshot),
+      notes: String(r.notes ?? '')
+    }))
+  };
+  return replaceLocalWithServer(farm, expenses, sales, batches, operations);
 }
 
 /** Push queue to /api/sync, then pull the fresh server copy. */
