@@ -128,6 +128,7 @@ export async function POST(req: Request) {
           date: expense.date || today(), category: expense.category || 'Other',
           description: expense.description || '', item_name: expense.itemName || expense.description || '',
           expense_type: expense.expenseType || 'other', batch_id: batchId,
+          supplier_id: expense.supplierId || null,
           qty, unit: expense.unit || 'Sack', price,
           kg_per_unit: Math.max(0, num(expense.kgPerUnit)), line_total: round2(qty * price)
         }).eq('id', expense.id).eq('farm_id', farm.id).eq('user_id', user.id);
