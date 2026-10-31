@@ -356,6 +356,7 @@ export default function ExpensesClient() {
       kgPerUnit: Math.max(0, num(formData.get('kgPerUnit'))),
       lineTotal: round2(q * p),
       batchId: String(formData.get('batchId') || '') || null,
+      supplierId: String(formData.get('supplierId') || '') || null,
       expenseType,
       itemName: description
     };
@@ -392,6 +393,7 @@ export default function ExpensesClient() {
       kgPerUnit: Math.max(0, num(formData.get('kgPerUnit'))),
       lineTotal: round2(qty * price),
       batchId: String(formData.get('batchId') || '') || null,
+      supplierId: String(formData.get('supplierId') || '') || null,
       expenseType: String(formData.get('expenseType') || current.expenseType || 'other')
     };
     local.expenses = local.expenses.map((item) => item.id === id ? updated : item);
@@ -477,6 +479,7 @@ export default function ExpensesClient() {
         <div className="grid grid-cols-2 gap-3">
           <label><span className="label">Expense type</span><select name="expenseType" className="input" value={expenseType} onChange={(event) => setExpenseType(event.target.value)}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="electricity">Electricity</option><option value="labor">Labor</option><option value="utilities">Utilities</option><option value="other">Other</option></select></label>
           <label><span className="label">Assign to batch (optional)</span><select name="batchId" className="input" defaultValue=""><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
+        <label className="block"><span className="label">Supplier (optional)</span><select name="supplierId" className="input" defaultValue=""><option value="">No saved supplier</option>{ledger.suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
         </div>
         <label className="block">
           <span className="label">Description</span>
@@ -573,6 +576,7 @@ export default function ExpensesClient() {
                       <label><span className="label">Expense type</span><select className="input" name="expenseType" defaultValue={e.expenseType || 'other'}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="electricity">Electricity</option><option value="other">Other</option></select></label>
                       <label><span className="label">Batch</span><select className="input" name="batchId" defaultValue={e.batchId || ''}><option value="">Farm-wide</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
                     </div>
+                    <label className="block"><span className="label">Supplier (optional)</span><select className="input" name="supplierId" defaultValue={e.supplierId || ''}><option value="">No saved supplier</option>{ledger.suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
                     <button type="submit" className="btn-primary w-full">Save changes</button>
                   </form>
                 </details>
