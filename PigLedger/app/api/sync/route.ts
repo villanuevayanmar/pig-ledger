@@ -3,13 +3,8 @@ import { ensureFarm } from '@/lib/data';
 import { num, round2, today } from '@/lib/format';
 import { createClient, supabaseConfigured } from '@/lib/supabase/server';
 import type { PendingOp } from '@/lib/local-store';
+import { deterministicUuid } from '@/lib/idempotency.mjs';
 
-async function stableRecordId(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(`pig-ledger:${value}`);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  const hex = Array.from(new Uint8Array(digest).slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-}
 
 function str(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value.trim() : fallback;
@@ -95,7 +90,7 @@ export async function POST(req: Request) {
         const qty = num(expense.qty);
         const price = num(expense.price);
         const result = await sb.from('expenses').upsert({
-          id: await stableRecordId(expense.id),
+          id: await deterministicUuid(`pig-ledger:${expense.id}`),
           farm_id: farm.id,
           user_id: user.id,
           date: expense.date || today(),
@@ -129,7 +124,7 @@ export async function POST(req: Request) {
         }).eq('id', expense.id).eq('farm_id', farm.id).eq('user_id', user.id);
         error = result.error;
       } else if (op.kind === 'delete-expense') {
-        const deleteId = String(op.id).startsWith('local-') ? await stableRecordId(op.id) : op.id;
+        const deleteId = String(op.id).startsWith('local-') ? await deterministicUuid(`pig-ledger:${op.id}`) : op.id;
         const result = await sb.from('expenses').delete().eq('id', deleteId).eq('user_id', user.id);
         error = result.error;
       } else if (op.kind === 'add-sale') {
@@ -142,7 +137,7 @@ export async function POST(req: Request) {
         const weightKg = num(sale.weightKg);
         const pricePerKg = num(sale.pricePerKg);
         const result = await sb.from('sales').upsert({
-          id: await stableRecordId(sale.id),
+          id: await deterministicUuid(`pig-ledger:${sale.id}`),
           farm_id: farm.id,
           user_id: user.id,
           date: sale.date || today(),
