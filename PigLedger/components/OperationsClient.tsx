@@ -187,7 +187,7 @@ export default function OperationsClient() {
       return;
     }
     const movement: FeedInventoryMovement = {
-      id: makeLocalId('local-stock'),
+      id: crypto.randomUUID(),
       farmId: product.farmId,
       productId,
       movementDate: String(formData.get('movementDate') || today()),
