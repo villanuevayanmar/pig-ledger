@@ -25,7 +25,11 @@ test('feed purchases are not confused with actual consumption', () => {
     { movementType: 'purchase', quantityUnits: 10, kgPerUnitSnapshot: 25 },
     { movementType: 'waste', quantityUnits: 1, kgPerUnitSnapshot: 25 }
   ], [{ quantityUnits: 4, kgPerUnitSnapshot: 25 }]);
-  assert.deepEqual(result, { purchasedKg: 250, consumedKg: 100, stockKg: 125, hasNegativeStock: false });
+  assert.equal(result.purchasedKg, 250);
+  assert.equal(result.consumedKg, 100);
+  assert.equal(result.stockKg, 125);
+  assert.equal(result.hasNegativeStock, false);
+  assert.equal(result.products[0].stockKg, 125);
 });
 
 test('feed stock warns when consumption exceeds recorded inventory', () => {
@@ -49,4 +53,17 @@ test('population counts are whole animals and invalid movement types are ignored
     { movementType: 'unknown', heads: 100 }
   ], [{ heads: 1.8 }]);
   assert.equal(result.currentHeads, 3);
+});
+
+test('feed stock warnings are tracked per product, not hidden by another product', () => {
+  const result = calculateFeedStock([
+    { productId: 'starter', movementType: 'purchase', quantityUnits: 1, kgPerUnitSnapshot: 25 },
+    { productId: 'grower', movementType: 'purchase', quantityUnits: 1, kgPerUnitSnapshot: 25 }
+  ], [
+    { productId: 'starter', quantityUnits: 2, kgPerUnitSnapshot: 25 }
+  ]);
+  assert.equal(result.stockKg, 0);
+  assert.equal(result.hasNegativeStock, true);
+  assert.equal(result.products.find((item) => item.productId === 'starter').stockKg, -25);
+  assert.equal(result.products.find((item) => item.productId === 'grower').stockKg, 25);
 });
