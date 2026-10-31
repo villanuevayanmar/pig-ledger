@@ -87,7 +87,7 @@ export async function pullServerLedger() {
     .from('expenses')
     .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name, supplier_id')
     .eq('farm_id', farm.id)
-    .eq('user_id', uid)
+    
     .order('date', { ascending: false });
   let eRows = (expenseWithSupplier.data ?? []) as Array<Record<string, unknown>>;
   let expenseReadError = expenseWithSupplier.error;
@@ -96,7 +96,7 @@ export async function pullServerLedger() {
       .from('expenses')
       .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name')
       .eq('farm_id', farm.id)
-      .eq('user_id', uid)
+      
       .order('date', { ascending: false });
     eRows = (legacyExpenses.data ?? []) as Array<Record<string, unknown>>;
     expenseReadError = legacyExpenses.error;
@@ -108,7 +108,7 @@ export async function pullServerLedger() {
     .from('sales')
     .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id, customer_id')
     .eq('farm_id', farm.id)
-    .eq('user_id', uid)
+    
     .order('date', { ascending: false });
   let sRows = (salesWithCustomer.data ?? []) as Array<Record<string, unknown>>;
   let salesReadError = salesWithCustomer.error;
@@ -117,7 +117,7 @@ export async function pullServerLedger() {
       .from('sales')
       .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id')
       .eq('farm_id', farm.id)
-      .eq('user_id', uid)
+      
       .order('date', { ascending: false });
     sRows = (legacySales.data ?? []) as Array<Record<string, unknown>>;
     salesReadError = legacySales.error;
@@ -127,16 +127,16 @@ export async function pullServerLedger() {
   const [populationResult, productResult, inventoryResult, consumptionResult] = await Promise.all([
     sb.from('population_movements')
       .select('id, farm_id, batch_id, movement_date, movement_type, heads, notes')
-      .eq('farm_id', farm.id).eq('user_id', uid).order('movement_date', { ascending: false }),
+      .eq('farm_id', farm.id).order('movement_date', { ascending: false }),
     sb.from('feed_products')
       .select('id, farm_id, name, category, unit, kg_per_unit, is_active, created_at')
-      .eq('farm_id', farm.id).eq('user_id', uid).order('name', { ascending: true }),
+      .eq('farm_id', farm.id).order('name', { ascending: true }),
     sb.from('feed_inventory_movements')
       .select('id, farm_id, product_id, movement_date, movement_type, quantity_units, kg_per_unit_snapshot, unit_cost, notes')
-      .eq('farm_id', farm.id).eq('user_id', uid).order('movement_date', { ascending: false }),
+      .eq('farm_id', farm.id).order('movement_date', { ascending: false }),
     sb.from('feed_consumption')
       .select('id, farm_id, batch_id, product_id, consumption_date, quantity_units, kg_per_unit_snapshot, notes')
-      .eq('farm_id', farm.id).eq('user_id', uid).order('consumption_date', { ascending: false })
+      .eq('farm_id', farm.id).order('consumption_date', { ascending: false })
   ]);
   const operationErrors = [populationResult.error, productResult.error, inventoryResult.error, consumptionResult.error].filter(Boolean);
   const missingOperationsSchema = operationErrors.some((error) =>
@@ -149,10 +149,10 @@ export async function pullServerLedger() {
   const [weightResult, healthResult] = await Promise.all([
     sb.from('weight_records')
       .select('id, farm_id, batch_id, measured_on, head_count, average_weight_kg, notes')
-      .eq('farm_id', farm.id).eq('user_id', uid).order('measured_on', { ascending: false }),
+      .eq('farm_id', farm.id).order('measured_on', { ascending: false }),
     sb.from('health_records')
       .select('id, farm_id, batch_id, record_date, record_type, title, symptoms, medicine, dosage, treated_heads, cost, expense_id, next_due_date, notes')
-      .eq('farm_id', farm.id).eq('user_id', uid).order('record_date', { ascending: false })
+      .eq('farm_id', farm.id).order('record_date', { ascending: false })
   ]);
   const monitoringErrors = [weightResult.error, healthResult.error].filter(Boolean);
   const missingMonitoringSchema = monitoringErrors.some((error) =>
@@ -165,13 +165,13 @@ export async function pullServerLedger() {
   const [customerResult, supplierResult, paymentResult] = await Promise.all([
     sb.from('customers')
       .select('id, farm_id, name, phone, email, address, notes, is_active, created_at')
-      .eq('farm_id', farm.id).eq('user_id', uid).order('name', { ascending: true }),
+      .eq('farm_id', farm.id).order('name', { ascending: true }),
     sb.from('suppliers')
       .select('id, farm_id, name, phone, email, address, notes, is_active, created_at')
-      .eq('farm_id', farm.id).eq('user_id', uid).order('name', { ascending: true }),
+      .eq('farm_id', farm.id).order('name', { ascending: true }),
     sb.from('sale_payments')
       .select('id, farm_id, sale_id, payment_date, amount, payment_method, reference, notes')
-      .eq('farm_id', farm.id).eq('user_id', uid).order('payment_date', { ascending: false })
+      .eq('farm_id', farm.id).order('payment_date', { ascending: false })
   ]);
   const businessErrors = [customerResult.error, supplierResult.error, paymentResult.error].filter(Boolean);
   const missingBusinessSchema = missingBusinessColumns || businessErrors.some((error) =>
