@@ -165,7 +165,7 @@ export async function POST(req: Request) {
         }).eq('id', sale.id).eq('farm_id', farm.id).eq('user_id', user.id);
         error = result.error;
       } else if (op.kind === 'delete-sale') {
-        const deleteId = String(op.id).startsWith('local-') ? await stableRecordId(op.id) : op.id;
+        const deleteId = String(op.id).startsWith('local-') ? await deterministicUuid(`pig-ledger:${op.id}`) : op.id;
         const result = await sb.from('sales').delete().eq('id', deleteId).eq('user_id', user.id);
         error = result.error;
       } else if (op.kind === 'update-farm') {
