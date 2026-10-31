@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import SyncStatus from '@/components/SyncStatus';
 import { fmt, fmtDate, fmtKg, num, round2, today } from '@/lib/format';
 import { loadLocalLedger, makeLocalId, saveLocalLedger, type LocalLedger } from '@/lib/local-store';
-import { calculateBatchGrowthMetrics } from '@/lib/farm-operations.mjs';
+import { calculateBatchGrowthMetrics, calculatePopulation } from '@/lib/farm-operations.mjs';
 import type { Expense, HealthRecord, WeightRecord } from '@/lib/types';
 import { syncLedgerNow } from '@/components/ExpensesClient';
 
@@ -61,6 +61,32 @@ export default function MonitoringClient() {
         sale.date > previous.measuredOn &&
         sale.date <= latest.measuredOn
       );
+
+    const populationAt = (date: string) => {
+      const movements = ledger.populationMovements.filter((movement) =>
+        movement.batchId === selectedBatch.id && movement.movementDate <= date
+      );
+      const hasOpening = movements.some((movement) => movement.movementType === 'opening');
+      const opening = !hasOpening && selectedBatch.startDate <= date
+        ? [{
+            id: 'opening-' + selectedBatch.id,
+            farmId: selectedBatch.farmId,
+            batchId: selectedBatch.id,
+            movementDate: selectedBatch.startDate,
+            movementType: 'opening' as const,
+            heads: selectedBatch.initialHeads,
+            notes: ''
+          }]
+        : [];
+      const salesToDate = ledger.sales.filter((sale) =>
+        sale.batchId === selectedBatch.id && sale.date <= date
+      );
+      return calculatePopulation([...opening, ...movements], salesToDate).currentHeads;
+    };
+    const previousPopulation = populationAt(previous.measuredOn);
+    const latestPopulation = populationAt(latest.measuredOn);
+    const populationSnapshotsMatch =
+      previous.headCount === previousPopulation && latest.headCount === latestPopulation;
     const consumedFeedKg = ledger.feedConsumption
       .filter((item) =>
         item.batchId === selectedBatch.id &&
@@ -75,9 +101,9 @@ export default function MonitoringClient() {
       endHeadCount: latest.headCount,
       days,
       consumedFeedKg: round2(consumedFeedKg),
-      populationChanged
+      populationChanged: populationChanged || !populationSnapshotsMatch
     });
-    return { weights, metrics, consumedFeedKg, populationChanged, previous, latest, days };
+    return { weights, metrics, consumedFeedKg, populationChanged, populationSnapshotsMatch, previous, latest, days };
   }, [ledger, selectedBatch]);
 
   const upcomingHealth = useMemo(() => {
@@ -241,11 +267,11 @@ export default function MonitoringClient() {
                   <p className="mt-1 text-xs text-slate-600">
                     {growth.metrics.fcrEligible
                       ? 'Estimated from actual feed consumption and calculated total liveweight gain.'
-                      : 'FCR is withheld because the head count changed, the population had movements or sales, or there is insufficient feed/weight gain data.'}
+                      : 'FCR is withheld because recorded head counts do not match the population ledger, the population changed, or there is insufficient feed/weight-gain data.'}
                   </p>
                 </div>
                 <p className="text-xs text-slate-500">Measurement interval: {fmtDate(growth.previous.measuredOn)} to {fmtDate(growth.latest.measuredOn)} ({growth.days} day(s)). Population at measurements: {growth.previous.headCount} to {growth.latest.headCount} head(s).</p>
-                {growth.populationChanged ? <p className="text-xs font-semibold text-amber-700">Population movements or sales occurred in this interval; FCR is not reported.</p> : null}
+                {growth.populationChanged ? <p className="text-xs font-semibold text-amber-700">Population movements or sales occurred in this interval, or a recorded weigh-in head count does not match the population ledger; FCR is not reported.</p> : null}
               </>
             ) : (
               <p className="muted">Add at least two weight records for this batch before growth and FCR can be calculated.</p>
