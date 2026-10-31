@@ -24,7 +24,7 @@ async function ownedBatchExists(sb: ReturnType<typeof createClient>, batchId: st
     .select('id')
     .eq('id', batchId)
     .eq('farm_id', farmId)
-    .eq('user_id', userId)
+    
     .maybeSingle();
   return !error && Boolean(data);
 }
@@ -150,11 +150,11 @@ export async function POST(req: Request) {
           ...(expense.supplierId ? { supplier_id: expense.supplierId } : {}),
           qty, unit: expense.unit || 'Sack', price,
           kg_per_unit: Math.max(0, num(expense.kgPerUnit)), line_total: round2(qty * price)
-        }).eq('id', expense.id).eq('farm_id', farm.id).eq('user_id', user.id);
+        }).eq('id', expense.id).eq('farm_id', farm.id);
         error = result.error;
       } else if (op.kind === 'delete-expense') {
         const deleteId = String(op.id).startsWith('local-') ? await deterministicUuid(`pig-ledger:${op.id}`) : op.id;
-        const result = await sb.from('expenses').delete().eq('id', deleteId).eq('user_id', user.id);
+        const result = await sb.from('expenses').delete().eq('id', deleteId);
         error = result.error;
       } else if (op.kind === 'add-sale') {
         const sale = op.sale;
@@ -193,11 +193,11 @@ export async function POST(req: Request) {
           weight_kg: weightKg, price_per_kg: pricePerKg,
           gross: round2(weightKg * pricePerKg), batch_id: batchId,
           ...(sale.customerId ? { customer_id: sale.customerId } : {})
-        }).eq('id', sale.id).eq('farm_id', farm.id).eq('user_id', user.id);
+        }).eq('id', sale.id).eq('farm_id', farm.id);
         error = result.error;
       } else if (op.kind === 'delete-sale') {
         const deleteId = String(op.id).startsWith('local-') ? await deterministicUuid(`pig-ledger:${op.id}`) : op.id;
-        const result = await sb.from('sales').delete().eq('id', deleteId).eq('user_id', user.id);
+        const result = await sb.from('sales').delete().eq('id', deleteId);
         error = result.error;
       } else if (op.kind === 'add-population-movement') {
         const movement = op.movement;
@@ -330,7 +330,7 @@ export async function POST(req: Request) {
         const result = await sb.from('farms').update({
           name: str(op.farm.name, farm.name),
           pig_count: Math.max(0, Math.round(num(op.farm.pigCount)))
-        }).eq('id', farm.id).eq('user_id', user.id);
+        }).eq('id', farm.id);
         error = result.error;
       }
 
