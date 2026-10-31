@@ -74,6 +74,7 @@ export type Expense = {
   expenseType?: string;
   itemName?: string;
   kgPerUnit?: number;
+  supplierId?: string | null;
 };
 
 export type Sale = {
@@ -85,6 +86,7 @@ export type Sale = {
   pricePerKg: number;
   gross: number;
   batchId?: string | null;
+  customerId?: string | null;
 };
 
 export type Farm = {
@@ -189,5 +191,42 @@ export type HealthRecord = {
   cost: number;
   expenseId?: string | null;
   nextDueDate?: string | null;
+  notes: string;
+};
+
+export type Customer = {
+  id: string;
+  farmId: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type Supplier = {
+  id: string;
+  farmId: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type SalePaymentMethod = 'cash' | 'bank_transfer' | 'e_wallet' | 'check' | 'other';
+
+export type SalePayment = {
+  id: string;
+  farmId: string;
+  saleId: string;
+  paymentDate: string;
+  amount: number;
+  paymentMethod: SalePaymentMethod;
+  reference: string;
   notes: string;
 };
