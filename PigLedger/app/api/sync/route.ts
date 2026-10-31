@@ -35,9 +35,11 @@ export async function POST(req: Request) {
   }
 
   let ops: PendingOp[] = [];
+  let requestedFarmId = '';
   try {
     const body = await req.json();
     if (Array.isArray(body?.ops)) ops = body.ops.slice(0, 200);
+    if (typeof body?.farmId === 'string') requestedFarmId = body.farmId;
   } catch {
     return NextResponse.json({ ok: false, message: 'Invalid sync payload.' }, { status: 400 });
   }
@@ -51,7 +53,24 @@ export async function POST(req: Request) {
 
   let farm;
   try {
-    farm = await ensureFarm(sb);
+    if (requestedFarmId && requestedFarmId !== 'local-farm') {
+      const { data: selectedFarm, error: farmReadError } = await sb
+        .from('farms')
+        .select('id, name, pig_count, start_date')
+        .eq('id', requestedFarmId)
+        .maybeSingle();
+      if (farmReadError || !selectedFarm) {
+        return NextResponse.json({ ok: false, message: 'You no longer have access to the selected farm. Choose an available farm and try again.' }, { status: 403 });
+      }
+      farm = {
+        id: String(selectedFarm.id),
+        name: String(selectedFarm.name ?? 'My Piggery'),
+        pigCount: Math.max(0, Math.round(num(selectedFarm.pig_count))),
+        startDate: String(selectedFarm.start_date ?? '')
+      };
+    } else {
+      farm = await ensureFarm(sb);
+    }
   } catch (err) {
     return NextResponse.json({ ok: false, message: err instanceof Error ? err.message : 'Could not load farm.' }, { status: 500 });
   }
@@ -86,7 +105,7 @@ export async function POST(req: Request) {
           initial_heads: Math.max(0, Math.round(num(batch.initialHeads))),
           status: batch.status || 'active',
           projection: batch.projection || {}
-        }).eq('id', batch.id).eq('farm_id', farm.id).eq('user_id', user.id);
+        }).eq('id', batch.id).eq('farm_id', farm.id);
         error = result.error;
       } else if (op.kind === 'add-expense') {
         const expense = op.expense;
