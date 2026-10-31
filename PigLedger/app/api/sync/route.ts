@@ -105,7 +105,7 @@ export async function POST(req: Request) {
           category: expense.category || 'Other',
           description: expense.description || '',
           item_name: expense.itemName || expense.description || '',
-          supplier_id: expense.supplierId || null,
+          ...(expense.supplierId ? { supplier_id: expense.supplierId } : {}),
           expense_type: expense.expenseType || 'other',
           batch_id: batchId,
           qty,
@@ -128,7 +128,7 @@ export async function POST(req: Request) {
           date: expense.date || today(), category: expense.category || 'Other',
           description: expense.description || '', item_name: expense.itemName || expense.description || '',
           expense_type: expense.expenseType || 'other', batch_id: batchId,
-          supplier_id: expense.supplierId || null,
+          ...(expense.supplierId ? { supplier_id: expense.supplierId } : {}),
           qty, unit: expense.unit || 'Sack', price,
           kg_per_unit: Math.max(0, num(expense.kgPerUnit)), line_total: round2(qty * price)
         }).eq('id', expense.id).eq('farm_id', farm.id).eq('user_id', user.id);
@@ -157,7 +157,7 @@ export async function POST(req: Request) {
           price_per_kg: pricePerKg,
           gross: round2(weightKg * pricePerKg),
           batch_id: batchId,
-          customer_id: sale.customerId || null
+          ...(sale.customerId ? { customer_id: sale.customerId } : {})
         }, { onConflict: 'id' });
         error = result.error;
       } else if (op.kind === 'update-sale') {
@@ -173,7 +173,7 @@ export async function POST(req: Request) {
           date: sale.date || today(), buyer: sale.buyer || '', heads: Math.round(num(sale.heads)),
           weight_kg: weightKg, price_per_kg: pricePerKg,
           gross: round2(weightKg * pricePerKg), batch_id: batchId,
-          customer_id: sale.customerId || null
+          ...(sale.customerId ? { customer_id: sale.customerId } : {})
         }).eq('id', sale.id).eq('farm_id', farm.id).eq('user_id', user.id);
         error = result.error;
       } else if (op.kind === 'delete-sale') {
