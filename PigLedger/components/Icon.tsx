@@ -73,6 +73,12 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M3 12h4l3-8 4 16 3-8h4" />
     </>
   ),
+  briefcase: (
+    <>
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2" />
+    </>
+  ),
   building: (
     <>
       <rect x="4" y="3" width="16" height="18" rx="1" />
