@@ -15,7 +15,7 @@ import {
   type PendingOp
 } from '@/lib/local-store';
 import { CATEGORIES, FEED_CATEGORIES, UNITS } from '@/lib/types';
-import type { Batch, Expense } from '@/lib/types';
+import type { Batch, Expense, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord } from '@/lib/types';
 
 export async function pullServerLedger() {
   const sb = createBrowserClientApp();
@@ -136,7 +136,13 @@ export async function pullServerLedger() {
     batchId: r.batch_id ? String(r.batch_id) : null
   }));
 
-  const operations = missingOperationsSchema ? {
+  const operations: {
+    schemaReady: boolean;
+    populationMovements: PopulationMovement[];
+    feedProducts: FeedProduct[];
+    feedInventoryMovements: FeedInventoryMovement[];
+    feedConsumption: FeedConsumptionRecord[];
+  } = missingOperationsSchema ? {
     schemaReady: false,
     populationMovements: [],
     feedProducts: [],
@@ -146,7 +152,7 @@ export async function pullServerLedger() {
     schemaReady: true,
     populationMovements: (populationResult.data ?? []).map((r) => ({
       id: String(r.id), farmId: String(r.farm_id), batchId: String(r.batch_id),
-      movementDate: String(r.movement_date), movementType: String(r.movement_type),
+      movementDate: String(r.movement_date), movementType: String(r.movement_type) as PopulationMovement['movementType'],
       heads: Math.round(num(r.heads)), notes: String(r.notes ?? '')
     })),
     feedProducts: (productResult.data ?? []).map((r) => ({
