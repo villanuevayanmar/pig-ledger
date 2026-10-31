@@ -14,7 +14,6 @@ export default function HomeClient() {
   const [ledger, setLedger] = useState<LocalLedger | null>(null);
 
   useEffect(() => {
-    loadLocalLedger().then(setLedger);
     syncLedgerNow().then(setLedger).catch(() => {});
   }, []);
 
