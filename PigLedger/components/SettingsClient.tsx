@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import SyncStatus from '@/components/SyncStatus';
 import Icon from '@/components/Icon';
+import ExportImport from '@/components/ExportImport';
+import { computeTotals } from '@/lib/totals';
 import { num } from '@/lib/format';
 import {
   loadLocalLedger,
@@ -81,6 +83,17 @@ export default function SettingsClient() {
           <li>Download a JSON backup every week from the Settings page.</li>
         </ol>
       </details>
+
+      <div>
+        <h3 className="section-title">Backup and Restore</h3>
+        <p className="section-sub">Download a copy or safely merge a previous backup.</p>
+      </div>
+      <ExportImport
+        farm={ledger.farm}
+        expenses={ledger.expenses}
+        sales={ledger.sales}
+        totals={computeTotals(ledger.expenses, ledger.sales, ledger.farm.pigCount)}
+      />
     </div>
   );
 }
