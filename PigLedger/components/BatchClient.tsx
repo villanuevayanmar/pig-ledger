@@ -30,11 +30,7 @@ export default function BatchClient() {
   const [projectionError, setProjectionError] = useState('');
 
   useEffect(() => {
-    loadLocalLedger().then((value) => {
-      setLedger(value);
-      setSelectedId(value.batches[0]?.id ?? '');
-    });
-    syncLedgerNow().then((value) => {
+        syncLedgerNow().then((value) => {
       setLedger(value);
       setSelectedId((current) => current || value.batches[0]?.id || '');
     }).catch(() => {});
