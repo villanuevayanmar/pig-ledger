@@ -1,4 +1,4 @@
-import type { Batch, Expense, Farm, Sale, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord } from './types';
+import type { Batch, Expense, Farm, Sale, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord, WeightRecord, HealthRecord } from './types';
 import { createBrowserClientApp } from './supabase/client';
 
 export type PendingOp =
@@ -14,7 +14,9 @@ export type PendingOp =
   | { kind: 'add-population-movement'; movement: PopulationMovement }
   | { kind: 'add-feed-product'; product: FeedProduct }
   | { kind: 'add-feed-inventory'; movement: FeedInventoryMovement }
-  | { kind: 'add-feed-consumption'; consumption: FeedConsumptionRecord };
+  | { kind: 'add-feed-consumption'; consumption: FeedConsumptionRecord }
+  | { kind: 'add-weight-record'; record: WeightRecord }
+  | { kind: 'add-health-record'; record: HealthRecord };
 
 export type LocalLedger = {
   farm: Farm;
@@ -25,9 +27,12 @@ export type LocalLedger = {
   feedProducts: FeedProduct[];
   feedInventoryMovements: FeedInventoryMovement[];
   feedConsumption: FeedConsumptionRecord[];
+  weightRecords: WeightRecord[];
+  healthRecords: HealthRecord[];
   pending: PendingOp[];
   syncError?: string | null;
   operationsSchemaReady?: boolean;
+  monitoringSchemaReady?: boolean;
   updatedAt: string;
 };
 
@@ -74,9 +79,12 @@ export function defaultLedger(): LocalLedger {
     feedProducts: [],
     feedInventoryMovements: [],
     feedConsumption: [],
+    weightRecords: [],
+    healthRecords: [],
     pending: [],
     syncError: null,
     operationsSchemaReady: false,
+    monitoringSchemaReady: false,
     updatedAt: new Date().toISOString()
   };
 }
@@ -141,9 +149,12 @@ export async function loadLocalLedger(): Promise<LocalLedger> {
         feedProducts: Array.isArray(saved.feedProducts) ? saved.feedProducts : [],
         feedInventoryMovements: Array.isArray(saved.feedInventoryMovements) ? saved.feedInventoryMovements : [],
         feedConsumption: Array.isArray(saved.feedConsumption) ? saved.feedConsumption : [],
+        weightRecords: Array.isArray(saved.weightRecords) ? saved.weightRecords : [],
+        healthRecords: Array.isArray(saved.healthRecords) ? saved.healthRecords : [],
         pending: Array.isArray(saved.pending) ? saved.pending : [],
         syncError: typeof saved.syncError === 'string' ? saved.syncError : null,
         operationsSchemaReady: saved.operationsSchemaReady === true,
+        monitoringSchemaReady: saved.monitoringSchemaReady === true,
         updatedAt: saved.updatedAt ?? new Date().toISOString()
       };
   }
@@ -172,7 +183,10 @@ export async function replaceLocalWithServer(
     feedProducts: FeedProduct[];
     feedInventoryMovements: FeedInventoryMovement[];
     feedConsumption: FeedConsumptionRecord[];
+    weightRecords: WeightRecord[];
+    healthRecords: HealthRecord[];
     schemaReady: boolean;
+    monitoringSchemaReady: boolean;
   }
 ): Promise<LocalLedger> {
   let local = await loadLocalLedger();
@@ -212,7 +226,10 @@ export async function replaceLocalWithServer(
     feedProducts: mergeById(local.feedProducts ?? [], operations?.feedProducts ?? []),
     feedInventoryMovements: mergeById(local.feedInventoryMovements ?? [], operations?.feedInventoryMovements ?? []),
     feedConsumption: mergeById(local.feedConsumption ?? [], operations?.feedConsumption ?? []),
+    weightRecords: mergeById(local.weightRecords ?? [], operations?.weightRecords ?? []),
+    healthRecords: mergeById(local.healthRecords ?? [], operations?.healthRecords ?? []),
     operationsSchemaReady: operations?.schemaReady ?? local.operationsSchemaReady ?? false,
+    monitoringSchemaReady: operations?.monitoringSchemaReady ?? local.monitoringSchemaReady ?? false,
     pending: local.pending,
     syncError: local.syncError ?? null,
     updatedAt: new Date().toISOString()
