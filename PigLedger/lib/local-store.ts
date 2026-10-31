@@ -163,7 +163,13 @@ export async function replaceLocalWithServer(
   farm: Farm,
   expenses: Expense[],
   sales: Sale[],
-  batches: Batch[] = []
+  batches: Batch[] = [],
+  operations?: {
+    populationMovements: PopulationMovement[];
+    feedProducts: FeedProduct[];
+    feedInventoryMovements: FeedInventoryMovement[];
+    feedConsumption: FeedConsumptionRecord[];
+  }
 ): Promise<LocalLedger> {
   let local = await loadLocalLedger();
   if (local.farm.id !== 'local-farm' && local.farm.id !== farm.id) {
@@ -198,10 +204,10 @@ export async function replaceLocalWithServer(
     batches: mergedBatches,
     expenses: mergedExpenses,
     sales: mergedSales,
-    populationMovements: local.populationMovements ?? [],
-    feedProducts: local.feedProducts ?? [],
-    feedInventoryMovements: local.feedInventoryMovements ?? [],
-    feedConsumption: local.feedConsumption ?? [],
+    populationMovements: mergeById(local.populationMovements ?? [], operations?.populationMovements ?? []),
+    feedProducts: mergeById(local.feedProducts ?? [], operations?.feedProducts ?? []),
+    feedInventoryMovements: mergeById(local.feedInventoryMovements ?? [], operations?.feedInventoryMovements ?? []),
+    feedConsumption: mergeById(local.feedConsumption ?? [], operations?.feedConsumption ?? []),
     pending: local.pending,
     syncError: local.syncError ?? null,
     updatedAt: new Date().toISOString()
@@ -212,4 +218,11 @@ export async function replaceLocalWithServer(
 
 export function makeLocalId(prefix: string): string {
   return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+function mergeById<T extends { id: string }>(local: T[], remote: T[]): T[] {
+  const merged = new Map<string, T>();
+  for (const item of local) merged.set(item.id, item);
+  for (const item of remote) merged.set(item.id, item);
+  return [...merged.values()];
 }
