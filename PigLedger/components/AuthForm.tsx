@@ -17,8 +17,8 @@ function safeNext(raw: string | null): string {
   return '/';
 }
 
-async function claimLocalCopy(userId: string): Promise<void> {
-  window.localStorage.setItem(OWNER_KEY, userId);
+async function claimLocalCopy(_userId: string): Promise<void> {
+  // Account scoping is handled by local-store after the authenticated session is established.
 }
 
 /**
