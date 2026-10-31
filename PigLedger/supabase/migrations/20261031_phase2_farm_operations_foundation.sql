@@ -263,6 +263,14 @@ begin
     raise exception 'Feed product not found or inactive';
   end if;
 
+  -- Recheck after acquiring the product lock to make retries idempotent under concurrency.
+  if exists (
+    select 1 from public.feed_consumption fc
+    where fc.id = p_id and fc.user_id = (select auth.uid())
+  ) then
+    return p_id;
+  end if;
+
   if not exists (
     select 1 from public.batches b
     where b.id = p_batch_id
@@ -372,6 +380,14 @@ begin
   for update;
   if not found then
     raise exception 'Batch does not belong to this farm';
+  end if;
+
+  -- Recheck after the batch lock so concurrent retries with the same ID are idempotent.
+  if exists (
+    select 1 from public.population_movements pm
+    where pm.id = p_id and pm.user_id = (select auth.uid())
+  ) then
+    return p_id;
   end if;
 
   select exists (
