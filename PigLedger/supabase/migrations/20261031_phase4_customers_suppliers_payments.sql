@@ -271,7 +271,8 @@ create policy "own update sales" on public.sales
 
 grant select, insert, update on public.customers to authenticated;
 grant select, insert, update on public.suppliers to authenticated;
-grant select, insert on public.sale_payments to authenticated;
+grant select on public.sale_payments to authenticated;
+revoke insert, update, delete on public.sale_payments from anon, authenticated;
 
 create or replace function public.record_sale_payment(
   p_id uuid,
@@ -285,7 +286,7 @@ create or replace function public.record_sale_payment(
 )
 returns uuid
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -343,6 +344,8 @@ begin
 end;
 $$;
 
+revoke all on function public.record_sale_payment(uuid, uuid, uuid, date, numeric, text, text, text)
+  from public, anon;
 grant execute on function public.record_sale_payment(uuid, uuid, uuid, date, numeric, text, text, text)
   to authenticated;
 
@@ -379,3 +382,6 @@ create trigger validate_sale_gross_against_payments
 
 comment on table public.sale_payments is
   'Append-only customer receipts; multiple partial payments may settle one sale without changing gross revenue.';
+
+-- Payments must be recorded through record_sale_payment so outstanding balances
+-- are checked while the parent sale is locked. Do not allow direct table inserts.
