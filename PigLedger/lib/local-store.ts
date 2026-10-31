@@ -4,8 +4,10 @@ import { createBrowserClientApp } from './supabase/client';
 export type PendingOp =
   | { kind: 'add-expense'; expense: Expense }
   | { kind: 'delete-expense'; id: string }
+  | { kind: 'update-expense'; expense: Expense }
   | { kind: 'add-sale'; sale: Sale }
   | { kind: 'delete-sale'; id: string }
+  | { kind: 'update-sale'; sale: Sale }
   | { kind: 'add-batch'; batch: Batch }
   | { kind: 'update-batch'; batch: Batch }
   | { kind: 'update-farm'; farm: Farm };
