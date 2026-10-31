@@ -117,7 +117,7 @@ export async function pullServerLedger() {
 
 /** Push queue to /api/sync, then pull the fresh server copy. */
 export async function syncLedgerNow(): Promise<LocalLedger> {
-  const local = await loadLocalLedger();
+  let local = await loadLocalLedger();
   if (local.pending.length > 0) {
     try {
       const res = await fetch('/api/sync', {
@@ -130,7 +130,15 @@ export async function syncLedgerNow(): Promise<LocalLedger> {
         ? Math.max(0, Math.min(local.pending.length, json.completedOps))
         : 0;
       if (completed > 0) {
-        local.pending = local.pending.slice(completed);
+        const completedOps = local.pending.slice(0, completed);
+        const latest = await loadLocalLedger();
+        const remaining = [...latest.pending];
+        for (const completedOp of completedOps) {
+          const index = remaining.findIndex((item) => JSON.stringify(item) === JSON.stringify(completedOp));
+          if (index >= 0) remaining.splice(index, 1);
+        }
+        latest.pending = remaining;
+        local = latest;
         await saveLocalLedger(local);
       }
       if (!res.ok || json?.ok !== true || local.pending.length > 0) {
