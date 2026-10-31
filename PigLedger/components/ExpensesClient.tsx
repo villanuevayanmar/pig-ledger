@@ -127,13 +127,14 @@ export async function syncLedgerNow(): Promise<LocalLedger> {
         body: JSON.stringify({ ops: local.pending })
       });
       const json = await res.json();
-      if (json?.ok) {
-        const completed = Number.isInteger(json.completedOps) ? Math.max(0, Math.min(local.pending.length, json.completedOps)) : local.pending.length;
-        if (completed > 0) {
-          local.pending = local.pending.slice(completed);
-          await saveLocalLedger(local);
-        }
+      const completed = Number.isInteger(json?.completedOps)
+        ? Math.max(0, Math.min(local.pending.length, json.completedOps))
+        : 0;
+      if (completed > 0) {
+        local.pending = local.pending.slice(completed);
+        await saveLocalLedger(local);
       }
+      if (!res.ok || json?.ok !== true || local.pending.length > 0) return local;
     } catch {
       return local; // still offline — keep queue
     }
@@ -196,7 +197,12 @@ export default function ExpensesClient() {
     if (!confirm('Delete this expense record? This action cannot be undone.')) return;
     const local = await loadLocalLedger();
     local.expenses = local.expenses.filter((e) => e.id !== id);
-    local.pending = [...local.pending, { kind: 'delete-expense', id }];
+    const addIndex = local.pending.findIndex((op) => op.kind === 'add-expense' && op.expense.id === id);
+    if (addIndex >= 0) {
+      local.pending = local.pending.filter((op) => !(op.kind === 'add-expense' && op.expense.id === id));
+    } else {
+      local.pending = [...local.pending, { kind: 'delete-expense', id }];
+    }
     await saveLocalLedger(local);
     setLedger({ ...local });
     syncLedgerNow().then(setLedger).catch(() => {});
