@@ -91,7 +91,7 @@ export default function OperationsClient() {
       return;
     }
     const movement: PopulationMovement = {
-      id: makeLocalId('local-pop'),
+      id: crypto.randomUUID(),
       farmId: batch.farmId,
       batchId,
       movementDate: String(formData.get('movementDate') || today()),
@@ -141,7 +141,7 @@ export default function OperationsClient() {
       return;
     }
     const movement: FeedInventoryMovement = {
-      id: makeLocalId('local-stock'),
+      id: crypto.randomUUID(),
       farmId: product.farmId,
       productId,
       movementDate,
@@ -220,7 +220,7 @@ export default function OperationsClient() {
       return;
     }
     const consumption: FeedConsumptionRecord = {
-      id: makeLocalId('local-feeduse'),
+      id: crypto.randomUUID(),
       farmId: product.farmId,
       batchId,
       productId,
