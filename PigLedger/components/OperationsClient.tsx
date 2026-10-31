@@ -181,21 +181,30 @@ export default function OperationsClient() {
     const productId = String(formData.get('productId') || '');
     const quantityUnits = num(formData.get('quantityUnits'));
     const movementType = String(formData.get('movementType') || 'adjustment_in');
-    const product = ledger?.feedProducts.find((item) => item.id === productId);
-    if (!product || quantityUnits <= 0 || movementType !== 'adjustment_in') {
-      setError('Choose a product and enter a valid positive adjustment quantity.');
+    const product = ledger?.feedProducts.find((item) => item.id === productId && item.isActive);
+    if (!product || quantityUnits <= 0 || !['adjustment_in', 'adjustment_out', 'waste'].includes(movementType)) {
+      setError('Choose a product, movement type, and a positive quantity.');
       return;
+    }
+    if (movementType !== 'adjustment_in') {
+      const current = feedStock?.products.find((item) => item.productId === productId);
+      const availableKg = current?.stockKg ?? 0;
+      const requestedKg = quantityUnits * product.kgPerUnit;
+      if (requestedKg > availableKg + 0.000001) {
+        setError('This stock-out is greater than available inventory. Available: ' + fmtKg(availableKg) + '; requested: ' + fmtKg(requestedKg) + '.');
+        return;
+      }
     }
     const movement: FeedInventoryMovement = {
       id: crypto.randomUUID(),
       farmId: product.farmId,
       productId,
       movementDate: String(formData.get('movementDate') || today()),
-      movementType: 'adjustment_in',
+      movementType: movementType as FeedInventoryMovement['movementType'],
       quantityUnits,
       kgPerUnitSnapshot: product.kgPerUnit,
       unitCost: 0,
-      notes: String(formData.get('notes') || 'Opening stock / stock correction').trim()
+      notes: String(formData.get('notes') || '').trim()
     };
     await updateLocal((local) => {
       local.feedInventoryMovements = [...local.feedInventoryMovements, movement];
@@ -347,14 +356,15 @@ export default function OperationsClient() {
               <button className="btn-primary w-full" type="submit">Record purchase and expense</button>
             </form>
             <form action={handleAdjustment} className="space-y-3 border-t border-slate-100 pt-3">
-              <h4 className="text-sm font-semibold">Record opening / stock adjustment</h4>
+              <h4 className="text-sm font-semibold">Record a stock adjustment or waste</h4>
               <label className="block"><span className="label">Feed product</span><select className="input" name="productId">{ledger.feedProducts.filter((product) => product.isActive).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
+              <label className="block"><span className="label">Movement type</span><select className="input" name="movementType"><option value="adjustment_in">Add opening / corrected stock</option><option value="adjustment_out">Remove excess / corrected stock</option><option value="waste">Record spoiled or wasted feed</option></select></label>
               <div className="grid grid-cols-2 gap-3">
                 <label><span className="label">Date</span><input className="input" name="movementDate" type="date" defaultValue={today()} required /></label>
-                <label><span className="label">Stock to add (units)</span><input className="input" name="quantityUnits" type="number" min="0.01" step="any" required /></label>
+                <label><span className="label">Quantity (units)</span><input className="input" name="quantityUnits" type="number" min="0.01" step="any" required /></label>
               </div>
-              <label className="block"><span className="label">Notes</span><input className="input" name="notes" defaultValue="Opening stock / stock correction" /></label>
-              <button className="btn-secondary w-full" type="submit">Add stock adjustment</button>
+              <label className="block"><span className="label">Notes</span><input className="input" name="notes" placeholder="Reason for stock correction" /></label>
+              <button className="btn-secondary w-full" type="submit">Save stock movement</button>
             </form>
           </>
         ) : null}
