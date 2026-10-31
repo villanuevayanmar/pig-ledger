@@ -236,6 +236,40 @@ export async function POST(req: Request) {
           p_notes: str(consumption.notes)
         });
         error = result.error;
+      } else if (op.kind === 'add-weight-record') {
+        const record = op.record;
+        const result = await sb.from('weight_records').upsert({
+          id: await stableUuid(record.id),
+          farm_id: farm.id,
+          batch_id: record.batchId,
+          user_id: user.id,
+          measured_on: record.measuredOn || today(),
+          head_count: Math.max(1, Math.floor(num(record.headCount))),
+          average_weight_kg: num(record.averageWeightKg),
+          notes: str(record.notes)
+        }, { onConflict: 'id', ignoreDuplicates: true });
+        error = result.error;
+      } else if (op.kind === 'add-health-record') {
+        const record = op.record;
+        const expenseId = record.expenseId ? await stableUuid(record.expenseId) : null;
+        const result = await sb.from('health_records').upsert({
+          id: await stableUuid(record.id),
+          farm_id: farm.id,
+          batch_id: record.batchId,
+          user_id: user.id,
+          record_date: record.recordDate || today(),
+          record_type: record.recordType,
+          title: str(record.title),
+          symptoms: str(record.symptoms),
+          medicine: str(record.medicine),
+          dosage: str(record.dosage),
+          treated_heads: Math.max(0, Math.floor(num(record.treatedHeads))),
+          cost: num(record.cost),
+          expense_id: expenseId,
+          next_due_date: record.nextDueDate || null,
+          notes: str(record.notes)
+        }, { onConflict: 'id', ignoreDuplicates: true });
+        error = result.error;
       } else if (op.kind === 'update-farm') {
         const result = await sb.from('farms').update({
           name: str(op.farm.name, farm.name),
@@ -244,7 +278,7 @@ export async function POST(req: Request) {
         error = result.error;
       }
 
-      if (!['add-batch', 'update-batch', 'add-expense', 'update-expense', 'delete-expense', 'add-sale', 'update-sale', 'delete-sale', 'add-population-movement', 'add-feed-product', 'add-feed-inventory', 'add-feed-consumption', 'update-farm'].includes((op as { kind?: string }).kind ?? '')) {
+      if (!['add-batch', 'update-batch', 'add-expense', 'update-expense', 'delete-expense', 'add-sale', 'update-sale', 'delete-sale', 'add-population-movement', 'add-feed-product', 'add-feed-inventory', 'add-feed-consumption', 'add-weight-record', 'add-health-record', 'update-farm'].includes((op as { kind?: string }).kind ?? '')) {
         failure = 'Unsupported sync operation. The record was kept in the local queue.';
         break;
       }
