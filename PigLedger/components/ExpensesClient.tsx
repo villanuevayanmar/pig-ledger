@@ -74,19 +74,47 @@ export async function pullServerLedger() {
     projection: (r.projection && typeof r.projection === 'object' ? r.projection : {}) as Batch['projection'],
     createdAt: String(r.created_at ?? '')
   }));
-  const { data: eRows, error: expenseReadError } = await sb
+  let missingBusinessColumns = false;
+  const expenseWithSupplier = await sb
     .from('expenses')
     .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name, supplier_id')
     .eq('farm_id', farm.id)
     .eq('user_id', uid)
     .order('date', { ascending: false });
+  let eRows = (expenseWithSupplier.data ?? []) as Array<Record<string, unknown>>;
+  let expenseReadError = expenseWithSupplier.error;
+  if (expenseReadError && /supplier_id/.test(expenseReadError.message)) {
+    const legacyExpenses = await sb
+      .from('expenses')
+      .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name')
+      .eq('farm_id', farm.id)
+      .eq('user_id', uid)
+      .order('date', { ascending: false });
+    eRows = (legacyExpenses.data ?? []) as Array<Record<string, unknown>>;
+    expenseReadError = legacyExpenses.error;
+    missingBusinessColumns = true;
+  }
   if (expenseReadError) throw new Error('Could not refresh expenses.');
-  const { data: sRows, error: salesReadError } = await sb
+
+  const salesWithCustomer = await sb
     .from('sales')
     .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id, customer_id')
     .eq('farm_id', farm.id)
     .eq('user_id', uid)
     .order('date', { ascending: false });
+  let sRows = (salesWithCustomer.data ?? []) as Array<Record<string, unknown>>;
+  let salesReadError = salesWithCustomer.error;
+  if (salesReadError && /customer_id/.test(salesReadError.message)) {
+    const legacySales = await sb
+      .from('sales')
+      .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id')
+      .eq('farm_id', farm.id)
+      .eq('user_id', uid)
+      .order('date', { ascending: false });
+    sRows = (legacySales.data ?? []) as Array<Record<string, unknown>>;
+    salesReadError = legacySales.error;
+    missingBusinessColumns = true;
+  }
   if (salesReadError) throw new Error('Could not refresh sales.');
   const [populationResult, productResult, inventoryResult, consumptionResult] = await Promise.all([
     sb.from('population_movements')
@@ -138,7 +166,7 @@ export async function pullServerLedger() {
       .eq('farm_id', farm.id).eq('user_id', uid).order('payment_date', { ascending: false })
   ]);
   const businessErrors = [customerResult.error, supplierResult.error, paymentResult.error].filter(Boolean);
-  const missingBusinessSchema = businessErrors.some((error) =>
+  const missingBusinessSchema = missingBusinessColumns || businessErrors.some((error) =>
     error?.code === '42P01' || error?.code === 'PGRST205' ||
     /could not find the table|relation .* does not exist/i.test(error?.message ?? '')
   );
