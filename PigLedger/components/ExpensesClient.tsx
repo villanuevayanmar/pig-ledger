@@ -15,7 +15,7 @@ import {
   type PendingOp
 } from '@/lib/local-store';
 import { CATEGORIES, FEED_CATEGORIES, UNITS } from '@/lib/types';
-import type { Batch, Expense, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord } from '@/lib/types';
+import type { Batch, Expense, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord, WeightRecord, HealthRecord } from '@/lib/types';
 
 export async function pullServerLedger() {
   const sb = createBrowserClientApp();
@@ -110,6 +110,23 @@ export async function pullServerLedger() {
   if (operationErrors.length > 0 && !missingOperationsSchema) {
     throw new Error('Could not refresh farm operations records.');
   }
+  const [weightResult, healthResult] = await Promise.all([
+    sb.from('weight_records')
+      .select('id, farm_id, batch_id, measured_on, head_count, average_weight_kg, notes')
+      .eq('farm_id', farm.id).eq('user_id', uid).order('measured_on', { ascending: false }),
+    sb.from('health_records')
+      .select('id, farm_id, batch_id, record_date, record_type, title, symptoms, medicine, dosage, treated_heads, cost, expense_id, next_due_date, notes')
+      .eq('farm_id', farm.id).eq('user_id', uid).order('record_date', { ascending: false })
+  ]);
+  const monitoringErrors = [weightResult.error, healthResult.error].filter(Boolean);
+  const missingMonitoringSchema = monitoringErrors.some((error) =>
+    error?.code === '42P01' || error?.code === 'PGRST205' ||
+    /could not find the table|relation .* does not exist/i.test(error?.message ?? '')
+  );
+  if (monitoringErrors.length > 0 && !missingMonitoringSchema) {
+    throw new Error('Could not refresh animal monitoring records.');
+  }
+
 
   const expenses: Expense[] = ((eRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
     id: String(r.id),
@@ -142,12 +159,18 @@ export async function pullServerLedger() {
     feedProducts: FeedProduct[];
     feedInventoryMovements: FeedInventoryMovement[];
     feedConsumption: FeedConsumptionRecord[];
+    weightRecords: WeightRecord[];
+    healthRecords: HealthRecord[];
+    monitoringSchemaReady: boolean;
   } = missingOperationsSchema ? {
     schemaReady: false,
     populationMovements: [],
     feedProducts: [],
     feedInventoryMovements: [],
-    feedConsumption: []
+    feedConsumption: [],
+    weightRecords: [],
+    healthRecords: [],
+    monitoringSchemaReady: !missingMonitoringSchema
   } : {
     schemaReady: true,
     populationMovements: (populationResult.data ?? []).map((r) => ({
@@ -171,7 +194,21 @@ export async function pullServerLedger() {
       productId: String(r.product_id), consumptionDate: String(r.consumption_date),
       quantityUnits: num(r.quantity_units), kgPerUnitSnapshot: num(r.kg_per_unit_snapshot),
       notes: String(r.notes ?? '')
-    }))
+    })),
+    weightRecords: missingMonitoringSchema ? [] : (weightResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), batchId: String(r.batch_id),
+      measuredOn: String(r.measured_on), headCount: Math.round(num(r.head_count)),
+      averageWeightKg: num(r.average_weight_kg), notes: String(r.notes ?? '')
+    })),
+    healthRecords: missingMonitoringSchema ? [] : (healthResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), batchId: String(r.batch_id),
+      recordDate: String(r.record_date), recordType: String(r.record_type) as HealthRecord['recordType'],
+      title: String(r.title), symptoms: String(r.symptoms ?? ''), medicine: String(r.medicine ?? ''),
+      dosage: String(r.dosage ?? ''), treatedHeads: Math.round(num(r.treated_heads)), cost: num(r.cost),
+      expenseId: r.expense_id ? String(r.expense_id) : null,
+      nextDueDate: r.next_due_date ? String(r.next_due_date) : null, notes: String(r.notes ?? '')
+    })),
+    monitoringSchemaReady: !missingMonitoringSchema
   };
   return replaceLocalWithServer(farm, expenses, sales, batches, operations);
 }
