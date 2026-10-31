@@ -116,7 +116,9 @@ export async function pullServerLedger() {
 }
 
 /** Push queue to /api/sync, then pull the fresh server copy. */
-export async function syncLedgerNow(): Promise<LocalLedger> {
+let syncInFlight: Promise<LocalLedger> | null = null;
+
+async function performSyncLedgerNow(): Promise<LocalLedger> {
   let local = await loadLocalLedger();
   if (local.pending.length > 0) {
     try {
@@ -167,6 +169,20 @@ export async function syncLedgerNow(): Promise<LocalLedger> {
     // offline — fall through
   }
   return loadLocalLedger();
+}
+
+export async function syncLedgerNow(): Promise<LocalLedger> {
+  if (syncInFlight) {
+    await syncInFlight;
+    return syncLedgerNow();
+  }
+  const task = performSyncLedgerNow();
+  syncInFlight = task;
+  try {
+    return await task;
+  } finally {
+    if (syncInFlight === task) syncInFlight = null;
+  }
 }
 
 export default function ExpensesClient() {
