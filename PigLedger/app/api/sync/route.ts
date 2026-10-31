@@ -137,7 +137,7 @@ export async function POST(req: Request) {
       } else if (op.kind === 'update-expense') {
         const expense = op.expense;
         const batchId = expense.batchId || null;
-        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id, user.id))) {
+        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id))) {
           failure = 'The selected batch is not synced yet. Keep the device online and sync again.';
           break;
         }
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
       } else if (op.kind === 'add-sale') {
         const sale = op.sale;
         const batchId = sale.batchId || null;
-        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id, user.id))) {
+        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id))) {
           failure = 'The selected batch is not synced yet. Keep the device online and sync again.';
           break;
         }
@@ -182,7 +182,7 @@ export async function POST(req: Request) {
       } else if (op.kind === 'update-sale') {
         const sale = op.sale;
         const batchId = sale.batchId || null;
-        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id, user.id))) {
+        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id))) {
           failure = 'The selected batch is not synced yet. Keep the device online and sync again.';
           break;
         }
