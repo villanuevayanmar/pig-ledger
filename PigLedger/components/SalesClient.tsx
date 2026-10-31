@@ -35,7 +35,8 @@ export default function SalesClient() {
       weightKg: w,
       pricePerKg: p,
       gross: round2(w * p),
-      batchId: String(formData.get('batchId') || '') || null
+      batchId: String(formData.get('batchId') || '') || null,
+      customerId: String(formData.get('customerId') || '') || null
     };
     const local = await loadLocalLedger();
     const op: PendingOp = { kind: 'add-sale', sale };
@@ -63,7 +64,8 @@ export default function SalesClient() {
       weightKg: weight,
       pricePerKg: price,
       gross: round2(weight * price),
-      batchId: String(formData.get('batchId') || '') || null
+      batchId: String(formData.get('batchId') || '') || null,
+      customerId: String(formData.get('customerId') || '') || null
     };
     local.sales = local.sales.map((item) => item.id === id ? updated : item);
     const addIndex = local.pending.findIndex((op) => op.kind === 'add-sale' && op.sale.id === id);
@@ -125,6 +127,7 @@ export default function SalesClient() {
             <input type="text" name="buyer" className="input" placeholder="e.g. Mang Roger" />
           </label>
         </div>
+        <label className="block"><span className="label">Customer contact (optional)</span><select name="customerId" className="input" defaultValue=""><option value="">No saved customer</option>{ledger.customers.filter((customer) => customer.isActive).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
         <label className="block"><span className="label">Assign to batch (optional)</span><select name="batchId" className="input" defaultValue=""><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
         <div className="grid grid-cols-2 gap-3">
           <label>
@@ -190,6 +193,7 @@ export default function SalesClient() {
                       <label><span className="label">Date</span><input className="input" type="date" name="date" defaultValue={s.date} required /></label>
                       <label><span className="label">Buyer</span><input className="input" name="buyer" defaultValue={s.buyer} /></label>
                     </div>
+                    <label className="block"><span className="label">Customer contact (optional)</span><select className="input" name="customerId" defaultValue={s.customerId || ''}><option value="">No saved customer</option>{ledger.customers.filter((customer) => customer.isActive).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
                     <label className="block"><span className="label">Batch</span><select className="input" name="batchId" defaultValue={s.batchId || ''}><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
                     <div className="grid grid-cols-2 gap-2">
                       <label><span className="label">Number of pigs</span><input className="input" type="number" min="0" step="1" name="heads" defaultValue={s.heads} required /></label>
