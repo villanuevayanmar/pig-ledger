@@ -162,7 +162,7 @@ export async function pullServerLedger() {
     })),
     feedInventoryMovements: (inventoryResult.data ?? []).map((r) => ({
       id: String(r.id), farmId: String(r.farm_id), productId: String(r.product_id),
-      movementDate: String(r.movement_date), movementType: String(r.movement_type),
+      movementDate: String(r.movement_date), movementType: String(r.movement_type) as FeedInventoryMovement['movementType'],
       quantityUnits: num(r.quantity_units), kgPerUnitSnapshot: num(r.kg_per_unit_snapshot),
       unitCost: num(r.unit_cost), notes: String(r.notes ?? '')
     })),
