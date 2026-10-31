@@ -12,7 +12,7 @@ create table if not exists public.population_movements (
   batch_id uuid not null references public.batches(id) on delete restrict,
   user_id uuid not null references auth.users(id) on delete cascade,
   movement_date date not null default current_date,
-  movement_type text not null check (movement_type in ('opening', 'purchase', 'mortality', 'transfer_in', 'transfer_out', 'adjustment')),
+  movement_type text not null check (movement_type in ('opening', 'purchase', 'mortality', 'transfer_in', 'transfer_out', 'adjustment_in', 'adjustment_out')),
   heads integer not null check (heads > 0),
   notes text not null default '',
   created_at timestamptz not null default now(),
