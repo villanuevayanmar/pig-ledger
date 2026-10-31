@@ -105,6 +105,7 @@ export async function POST(req: Request) {
           category: expense.category || 'Other',
           description: expense.description || '',
           item_name: expense.itemName || expense.description || '',
+          supplier_id: expense.supplierId || null,
           expense_type: expense.expenseType || 'other',
           batch_id: batchId,
           qty,
@@ -154,7 +155,8 @@ export async function POST(req: Request) {
           weight_kg: weightKg,
           price_per_kg: pricePerKg,
           gross: round2(weightKg * pricePerKg),
-          batch_id: batchId
+          batch_id: batchId,
+          customer_id: sale.customerId || null
         }, { onConflict: 'id' });
         error = result.error;
       } else if (op.kind === 'update-sale') {
@@ -169,7 +171,8 @@ export async function POST(req: Request) {
         const result = await sb.from('sales').update({
           date: sale.date || today(), buyer: sale.buyer || '', heads: Math.round(num(sale.heads)),
           weight_kg: weightKg, price_per_kg: pricePerKg,
-          gross: round2(weightKg * pricePerKg), batch_id: batchId
+          gross: round2(weightKg * pricePerKg), batch_id: batchId,
+          customer_id: sale.customerId || null
         }).eq('id', sale.id).eq('farm_id', farm.id).eq('user_id', user.id);
         error = result.error;
       } else if (op.kind === 'delete-sale') {
@@ -262,6 +265,47 @@ export async function POST(req: Request) {
           notes: str(record.notes)
         }, { onConflict: 'id', ignoreDuplicates: true });
         error = result.error;
+      } else if (op.kind === 'add-customer') {
+        const customer = op.customer;
+        const result = await sb.from('customers').upsert({
+          id: await stableUuid(customer.id),
+          farm_id: farm.id,
+          user_id: user.id,
+          name: str(customer.name),
+          phone: str(customer.phone),
+          email: str(customer.email),
+          address: str(customer.address),
+          notes: str(customer.notes),
+          is_active: customer.isActive !== false
+        }, { onConflict: 'id', ignoreDuplicates: true });
+        error = result.error;
+      } else if (op.kind === 'add-supplier') {
+        const supplier = op.supplier;
+        const result = await sb.from('suppliers').upsert({
+          id: await stableUuid(supplier.id),
+          farm_id: farm.id,
+          user_id: user.id,
+          name: str(supplier.name),
+          phone: str(supplier.phone),
+          email: str(supplier.email),
+          address: str(supplier.address),
+          notes: str(supplier.notes),
+          is_active: supplier.isActive !== false
+        }, { onConflict: 'id', ignoreDuplicates: true });
+        error = result.error;
+      } else if (op.kind === 'add-sale-payment') {
+        const payment = op.payment;
+        const result = await sb.rpc('record_sale_payment', {
+          p_id: await stableUuid(payment.id),
+          p_farm_id: farm.id,
+          p_sale_id: await stableUuid(payment.saleId),
+          p_payment_date: payment.paymentDate || today(),
+          p_amount: num(payment.amount),
+          p_payment_method: payment.paymentMethod,
+          p_reference: str(payment.reference),
+          p_notes: str(payment.notes)
+        });
+        error = result.error;
       } else if (op.kind === 'update-farm') {
         const result = await sb.from('farms').update({
           name: str(op.farm.name, farm.name),
@@ -270,7 +314,7 @@ export async function POST(req: Request) {
         error = result.error;
       }
 
-      if (!['add-batch', 'update-batch', 'add-expense', 'update-expense', 'delete-expense', 'add-sale', 'update-sale', 'delete-sale', 'add-population-movement', 'add-feed-product', 'add-feed-inventory', 'add-feed-consumption', 'add-weight-record', 'add-health-record', 'update-farm'].includes((op as { kind?: string }).kind ?? '')) {
+      if (!['add-batch', 'update-batch', 'add-expense', 'update-expense', 'delete-expense', 'add-sale', 'update-sale', 'delete-sale', 'add-population-movement', 'add-feed-product', 'add-feed-inventory', 'add-feed-consumption', 'add-weight-record', 'add-health-record', 'add-customer', 'add-supplier', 'add-sale-payment', 'update-farm'].includes((op as { kind?: string }).kind ?? '')) {
         failure = 'Unsupported sync operation. The record was kept in the local queue.';
         break;
       }
