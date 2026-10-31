@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculatePopulation, calculateFeedStock, calculateGrowthMetrics } from '../lib/farm-operations.mjs';
+import { calculatePopulation, calculateFeedStock, calculateGrowthMetrics, calculateBatchGrowthMetrics } from '../lib/farm-operations.mjs';
 
 test('population counts purchases, mortality, transfers and sales once', () => {
   const result = calculatePopulation([
@@ -66,4 +66,54 @@ test('feed stock warnings are tracked per product, not hidden by another product
   assert.equal(result.hasNegativeStock, true);
   assert.equal(result.products.find((item) => item.productId === 'starter').stockKg, -25);
   assert.equal(result.products.find((item) => item.productId === 'grower').stockKg, 25);
+});
+
+test('batch FCR is calculated only when population is stable between weigh-ins', () => {
+  const result = calculateBatchGrowthMetrics({
+    startAverageWeightKg: 20,
+    endAverageWeightKg: 30,
+    startHeadCount: 10,
+    endHeadCount: 10,
+    days: 30,
+    consumedFeedKg: 500,
+    populationChanged: false
+  });
+  assert.equal(result.gainPerHeadKg, 10);
+  assert.equal(result.averageDailyGainKg, 0.3333);
+  assert.equal(result.totalGainKg, 100);
+  assert.equal(result.fcr, 5);
+  assert.equal(result.fcrEligible, true);
+});
+
+test('batch FCR is withheld when population changes or head counts differ', () => {
+  const changed = calculateBatchGrowthMetrics({
+    startAverageWeightKg: 20, endAverageWeightKg: 30,
+    startHeadCount: 10, endHeadCount: 10, days: 30,
+    consumedFeedKg: 500, populationChanged: true
+  });
+  const differentCount = calculateBatchGrowthMetrics({
+    startAverageWeightKg: 20, endAverageWeightKg: 30,
+    startHeadCount: 10, endHeadCount: 9, days: 30,
+    consumedFeedKg: 500, populationChanged: false
+  });
+  assert.equal(changed.fcr, null);
+  assert.equal(changed.totalGainKg, null);
+  assert.equal(differentCount.fcr, null);
+  assert.equal(differentCount.fcrEligible, false);
+});
+
+test('batch ADG and FCR stay unavailable with invalid gains or no feed consumption', () => {
+  const noGain = calculateBatchGrowthMetrics({
+    startAverageWeightKg: 30, endAverageWeightKg: 20,
+    startHeadCount: 10, endHeadCount: 10, days: 30,
+    consumedFeedKg: 500
+  });
+  const noFeed = calculateBatchGrowthMetrics({
+    startAverageWeightKg: 20, endAverageWeightKg: 30,
+    startHeadCount: 10, endHeadCount: 10, days: 30,
+    consumedFeedKg: 0
+  });
+  assert.equal(noGain.averageDailyGainKg, null);
+  assert.equal(noGain.fcr, null);
+  assert.equal(noFeed.fcr, null);
 });
