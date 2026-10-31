@@ -214,3 +214,104 @@ comment on table public.feed_inventory_movements is
   'Feed stock-in and stock-out adjustments; purchase rows represent purchased inventory, not consumed feed.';
 comment on table public.feed_consumption is
   'Feed actually issued/consumed by a batch; kg is quantity_units multiplied by kg_per_unit_snapshot.';
+
+-- Serialize feed consumption by locking the product row and validate the
+-- current stock inside the same database transaction as the consumption insert.
+create or replace function public.record_feed_consumption(
+  p_id uuid,
+  p_farm_id uuid,
+  p_batch_id uuid,
+  p_product_id uuid,
+  p_consumption_date date,
+  p_quantity_units numeric,
+  p_kg_per_unit_snapshot numeric,
+  p_notes text default ''
+)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_stock_kg numeric := 0;
+  v_required_kg numeric := 0;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+  if p_quantity_units is null or p_quantity_units <= 0
+     or p_kg_per_unit_snapshot is null or p_kg_per_unit_snapshot <= 0 then
+    raise exception 'Consumption quantity and kilograms per unit must be greater than zero';
+  end if;
+
+  -- A retry after a successful insert must be idempotent.
+  if exists (
+    select 1 from public.feed_consumption fc
+    where fc.id = p_id and fc.user_id = (select auth.uid())
+  ) then
+    return p_id;
+  end if;
+
+  -- All consumption requests for one product serialize on this row.
+  perform 1 from public.feed_products fp
+  where fp.id = p_product_id
+    and fp.farm_id = p_farm_id
+    and fp.user_id = (select auth.uid())
+    and fp.is_active
+  for update;
+  if not found then
+    raise exception 'Feed product not found or inactive';
+  end if;
+
+  if not exists (
+    select 1 from public.batches b
+    where b.id = p_batch_id
+      and b.farm_id = p_farm_id
+      and b.user_id = (select auth.uid())
+  ) then
+    raise exception 'Batch does not belong to this farm';
+  end if;
+
+  select
+    coalesce(sum(
+      case
+        when im.movement_type in ('purchase', 'adjustment_in')
+          then im.quantity_units * im.kg_per_unit_snapshot
+        when im.movement_type in ('adjustment_out', 'waste')
+          then -im.quantity_units * im.kg_per_unit_snapshot
+        else 0
+      end
+    ), 0)
+    into v_stock_kg
+  from public.feed_inventory_movements im
+  where im.product_id = p_product_id and im.farm_id = p_farm_id;
+
+  select v_stock_kg - coalesce(sum(fc.quantity_units * fc.kg_per_unit_snapshot), 0)
+    into v_stock_kg
+  from public.feed_consumption fc
+  where fc.product_id = p_product_id and fc.farm_id = p_farm_id;
+
+  v_required_kg := p_quantity_units * p_kg_per_unit_snapshot;
+  if v_stock_kg + 0.000001 < v_required_kg then
+    raise exception 'Insufficient feed stock. Available: % kg; requested: % kg',
+      round(v_stock_kg, 2), round(v_required_kg, 2);
+  end if;
+
+  insert into public.feed_consumption (
+    id, farm_id, batch_id, product_id, user_id, consumption_date,
+    quantity_units, kg_per_unit_snapshot, notes
+  ) values (
+    p_id, p_farm_id, p_batch_id, p_product_id, (select auth.uid()),
+    coalesce(p_consumption_date, current_date), p_quantity_units,
+    p_kg_per_unit_snapshot, coalesce(p_notes, '')
+  );
+
+  return p_id;
+end;
+$$;
+
+grant execute on function public.record_feed_consumption(uuid, uuid, uuid, uuid, date, numeric, numeric, text)
+  to authenticated;
+
+comment on function public.record_feed_consumption(uuid, uuid, uuid, uuid, date, numeric, numeric, text) is
+  'Idempotently records actual feed consumption after locking the product and checking stock.';
