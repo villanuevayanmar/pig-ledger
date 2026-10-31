@@ -96,14 +96,14 @@ export default function ReportsPage() {
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Highlight label="Feed cost" value={fmt(report.feedCost)} />
-            <Highlight label="Feed weight" value={fmtKg(report.feedKg)} />
+            <Highlight label="Feed purchased" value={fmtKg(report.feedKg)} />
             <Highlight label="Total sales" value={fmt(report.salesTotal)} />
             <Highlight label="Total costs" value={fmt(report.totalCosts)} />
           </div>
         </div>
       </div>
 
-      <SyncStatus pending={ledger.pending.length} onSync={async () => setLedger(await syncLedgerNow())} />
+      <SyncStatus pending={ledger.pending.length} syncError={ledger.syncError} onSync={async () => setLedger(await syncLedgerNow())} />
       <label className="block print:hidden"><span className="label">Report scope</span>
         <select className="input" value={selectedBatchId} onChange={(event) => setSelectedBatchId(event.target.value)}>
           <option value="all">All batches and farm-wide records</option>
@@ -115,7 +115,7 @@ export default function ReportsPage() {
         <div><h3 className="font-bold text-slate-900">Feed breakdown</h3><p className="text-xs text-slate-500">Quantity, unit weight, cost per kilogram, and total feed used.</p></div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[620px] text-left text-sm">
-            <thead><tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-3">Feed name</th><th className="py-2 pr-3 text-right">Quantity</th><th className="py-2 pr-3 text-right">Price/kg</th><th className="py-2 pr-3 text-right">Amount</th><th className="py-2 text-right">Feed used</th></tr></thead>
+            <thead><tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-3">Feed name</th><th className="py-2 pr-3 text-right">Quantity</th><th className="py-2 pr-3 text-right">Price/kg</th><th className="py-2 pr-3 text-right">Amount</th><th className="py-2 text-right">Purchased kg</th></tr></thead>
             <tbody>
               {report.feedRows.length ? report.feedRows.map((item) => <tr key={item.id} className="border-b border-slate-100"><td className="py-3 pr-3 font-medium">{item.name}</td><td className="py-3 pr-3 text-right tabular-nums">{item.quantity} × {item.kgPerUnit || '—'} kg</td><td className="py-3 pr-3 text-right tabular-nums">{item.pricePerKg === null ? '—' : fmt(item.pricePerKg)}</td><td className="py-3 pr-3 text-right tabular-nums">{fmt(item.amount)}</td><td className="py-3 text-right tabular-nums">{fmtKg(item.kg)}</td></tr>) : <tr><td colSpan={5} className="py-5 text-center text-slate-500">No feed purchases recorded for this report.</td></tr>}
             </tbody>
@@ -147,9 +147,9 @@ export default function ReportsPage() {
 
       <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-800">Final result</p>
-        <div className="mt-3 flex items-end justify-between gap-3"><div><p className="text-sm font-medium text-emerald-900">Net profit</p><p className={'mt-1 text-3xl font-extrabold tabular-nums ' + (report.netProfit < 0 ? 'text-rose-700' : 'text-emerald-950')}>{fmt(report.netProfit)}</p></div><div className="text-right"><p className="text-xs text-emerald-800">Profit per head</p><p className="mt-1 text-xl font-bold tabular-nums text-emerald-950">{report.profitPerHead === null ? '—' : fmt(report.profitPerHead)}</p><p className="text-[11px] text-emerald-800">{report.headCount} head(s) used</p></div></div>
+        <div className="mt-3 flex items-end justify-between gap-3"><div><p className="text-sm font-medium text-emerald-900">Net profit</p><p className={'mt-1 text-3xl font-extrabold tabular-nums ' + (report.netProfit < 0 ? 'text-rose-700' : 'text-emerald-950')}>{fmt(report.netProfit)}</p></div><div className="text-right"><p className="text-xs text-emerald-800">Profit per head (using recorded herd size)</p><p className="mt-1 text-xl font-bold tabular-nums text-emerald-950">{report.profitPerHead === null ? '—' : fmt(report.profitPerHead)}</p><p className="text-[11px] text-emerald-800">{report.headCount} head(s) used</p></div></div>
       </section>
-      <p className="px-1 text-xs text-slate-500">Feed weight is calculated from the quantity entered multiplied by kilograms per unit. Purchases without a unit weight are included in feed cost but not in total feed kilograms.</p>
+      <p className="px-1 text-xs text-slate-500">Feed kilograms represent purchased weight calculated from quantity × kilograms per unit. This report does not measure feed consumption; purchases are counted once as expenses.</p>
     </div>
   );
 }
