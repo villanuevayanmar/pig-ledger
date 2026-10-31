@@ -111,6 +111,23 @@ export async function POST(req: Request) {
           line_total: round2(qty * price)
         }, { onConflict: 'id', ignoreDuplicates: true });
         error = result.error;
+      } else if (op.kind === 'update-expense') {
+        const expense = op.expense;
+        const batchId = expense.batchId || null;
+        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id, user.id))) {
+          failure = 'The selected batch is not synced yet. Keep the device online and sync again.';
+          break;
+        }
+        const qty = num(expense.qty);
+        const price = num(expense.price);
+        const result = await sb.from('expenses').update({
+          date: expense.date || today(), category: expense.category || 'Other',
+          description: expense.description || '', item_name: expense.itemName || expense.description || '',
+          expense_type: expense.expenseType || 'other', batch_id: batchId,
+          qty, unit: expense.unit || 'Sack', price,
+          kg_per_unit: Math.max(0, num(expense.kgPerUnit)), line_total: round2(qty * price)
+        }).eq('id', expense.id).eq('farm_id', farm.id).eq('user_id', user.id);
+        error = result.error;
       } else if (op.kind === 'delete-expense') {
         const deleteId = String(op.id).startsWith('local-') ? await stableRecordId(op.id) : op.id;
         const result = await sb.from('expenses').delete().eq('id', deleteId).eq('user_id', user.id);
@@ -137,6 +154,21 @@ export async function POST(req: Request) {
           batch_id: batchId
         }, { onConflict: 'id', ignoreDuplicates: true });
         error = result.error;
+      } else if (op.kind === 'update-sale') {
+        const sale = op.sale;
+        const batchId = sale.batchId || null;
+        if (batchId && !(await ownedBatchExists(sb, batchId, farm.id, user.id))) {
+          failure = 'The selected batch is not synced yet. Keep the device online and sync again.';
+          break;
+        }
+        const weightKg = num(sale.weightKg);
+        const pricePerKg = num(sale.pricePerKg);
+        const result = await sb.from('sales').update({
+          date: sale.date || today(), buyer: sale.buyer || '', heads: Math.round(num(sale.heads)),
+          weight_kg: weightKg, price_per_kg: pricePerKg,
+          gross: round2(weightKg * pricePerKg), batch_id: batchId
+        }).eq('id', sale.id).eq('farm_id', farm.id).eq('user_id', user.id);
+        error = result.error;
       } else if (op.kind === 'delete-sale') {
         const deleteId = String(op.id).startsWith('local-') ? await stableRecordId(op.id) : op.id;
         const result = await sb.from('sales').delete().eq('id', deleteId).eq('user_id', user.id);
@@ -149,7 +181,7 @@ export async function POST(req: Request) {
         error = result.error;
       }
 
-      if (!['add-batch', 'update-batch', 'add-expense', 'delete-expense', 'add-sale', 'delete-sale', 'update-farm'].includes((op as { kind?: string }).kind ?? '')) {
+      if (!['add-batch', 'update-batch', 'add-expense', 'update-expense', 'delete-expense', 'add-sale', 'update-sale', 'delete-sale', 'update-farm'].includes((op as { kind?: string }).kind ?? '')) {
         failure = 'Unsupported sync operation. The record was kept in the local queue.';
         break;
       }
