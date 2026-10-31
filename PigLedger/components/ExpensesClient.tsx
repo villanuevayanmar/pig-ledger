@@ -61,7 +61,6 @@ export async function pullServerLedger() {
     .eq('farm_id', farm.id)
     .eq('user_id', uid)
     .is('deleted_at', null)
-    .neq('status', 'archived')
     .order('start_date', { ascending: false });
   if (batchReadError) throw new Error('Could not refresh batches.');
   const batches: Batch[] = ((bRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
