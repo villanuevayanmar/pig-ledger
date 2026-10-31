@@ -28,25 +28,38 @@ export function calculatePopulation(movements = [], sales = []) {
 }
 
 export function calculateFeedStock(inventoryMovements = [], consumption = []) {
-  let stockKg = 0;
-  let purchasedKg = 0;
-  let consumedKg = 0;
+  const products = new Map();
+  const getProduct = (id) => {
+    const key = String(id ?? 'default');
+    if (!products.has(key)) products.set(key, { productId: key, purchasedKg: 0, consumedKg: 0, stockKg: 0 });
+    return products.get(key);
+  };
   for (const movement of inventoryMovements) {
+    const product = getProduct(movement.productId);
     const kg = nonNegative(movement.quantityUnits) * nonNegative(movement.kgPerUnitSnapshot);
-    if (movement.movementType === 'purchase') purchasedKg += kg;
-    if (movement.movementType === 'purchase' || movement.movementType === 'adjustment_in') stockKg += kg;
-    if (movement.movementType === 'adjustment_out' || movement.movementType === 'waste') stockKg -= kg;
+    if (movement.movementType === 'purchase') product.purchasedKg += kg;
+    if (movement.movementType === 'purchase' || movement.movementType === 'adjustment_in') product.stockKg += kg;
+    if (movement.movementType === 'adjustment_out' || movement.movementType === 'waste') product.stockKg -= kg;
   }
   for (const item of consumption) {
+    const product = getProduct(item.productId);
     const kg = nonNegative(item.quantityUnits) * nonNegative(item.kgPerUnitSnapshot);
-    consumedKg += kg;
-    stockKg -= kg;
+    product.consumedKg += kg;
+    product.stockKg -= kg;
   }
+  const productTotals = [...products.values()].map((item) => ({
+    productId: item.productId,
+    purchasedKg: round2(item.purchasedKg),
+    consumedKg: round2(item.consumedKg),
+    stockKg: round2(item.stockKg),
+    hasNegativeStock: item.stockKg < -0.000001
+  }));
   return {
-    purchasedKg: round2(purchasedKg),
-    consumedKg: round2(consumedKg),
-    stockKg: round2(stockKg),
-    hasNegativeStock: stockKg < -0.000001
+    purchasedKg: round2(productTotals.reduce((sum, item) => sum + item.purchasedKg, 0)),
+    consumedKg: round2(productTotals.reduce((sum, item) => sum + item.consumedKg, 0)),
+    stockKg: round2(productTotals.reduce((sum, item) => sum + item.stockKg, 0)),
+    hasNegativeStock: productTotals.some((item) => item.hasNegativeStock),
+    products: productTotals
   };
 }
 
