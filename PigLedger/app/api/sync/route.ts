@@ -168,6 +168,71 @@ export async function POST(req: Request) {
         const deleteId = String(op.id).startsWith('local-') ? await deterministicUuid(`pig-ledger:${op.id}`) : op.id;
         const result = await sb.from('sales').delete().eq('id', deleteId).eq('user_id', user.id);
         error = result.error;
+      } else if (op.kind === 'add-population-movement') {
+        const movement = op.movement;
+        if (!(await ownedBatchExists(sb, movement.batchId, farm.id, user.id))) {
+          failure = 'The selected batch is not synced to this farm yet.';
+          break;
+        }
+        const result = await sb.from('population_movements').upsert({
+          id: await deterministicUuid(`pig-ledger:${movement.id}`),
+          farm_id: farm.id,
+          batch_id: movement.batchId,
+          user_id: user.id,
+          movement_date: movement.movementDate || today(),
+          movement_type: movement.movementType,
+          heads: Math.max(1, Math.floor(num(movement.heads))),
+          notes: str(movement.notes)
+        }, { onConflict: 'id', ignoreDuplicates: true });
+        error = result.error;
+      } else if (op.kind === 'add-feed-product') {
+        const product = op.product;
+        const result = await sb.from('feed_products').upsert({
+          id: product.id,
+          farm_id: farm.id,
+          user_id: user.id,
+          name: str(product.name),
+          category: str(product.category, 'Other Feed'),
+          unit: str(product.unit, 'Sack'),
+          kg_per_unit: num(product.kgPerUnit),
+          is_active: product.isActive !== false
+        }, { onConflict: 'id' });
+        error = result.error;
+      } else if (op.kind === 'add-feed-inventory') {
+        const movement = op.movement;
+        const productResult = await sb.from('feed_products')
+          .select('id').eq('id', movement.productId).eq('farm_id', farm.id)
+          .eq('user_id', user.id).maybeSingle();
+        if (productResult.error || !productResult.data) {
+          failure = 'The selected feed product has not synced yet.';
+          break;
+        }
+        const result = await sb.from('feed_inventory_movements').upsert({
+          id: await deterministicUuid(`pig-ledger:${movement.id}`),
+          farm_id: farm.id,
+          product_id: movement.productId,
+          user_id: user.id,
+          movement_date: movement.movementDate || today(),
+          movement_type: movement.movementType,
+          quantity_units: num(movement.quantityUnits),
+          kg_per_unit_snapshot: num(movement.kgPerUnitSnapshot),
+          unit_cost: num(movement.unitCost),
+          notes: str(movement.notes)
+        }, { onConflict: 'id', ignoreDuplicates: true });
+        error = result.error;
+      } else if (op.kind === 'add-feed-consumption') {
+        const consumption = op.consumption;
+        const result = await sb.rpc('record_feed_consumption', {
+          p_id: await deterministicUuid(`pig-ledger:${consumption.id}`),
+          p_farm_id: farm.id,
+          p_batch_id: consumption.batchId,
+          p_product_id: consumption.productId,
+          p_consumption_date: consumption.consumptionDate || today(),
+          p_quantity_units: num(consumption.quantityUnits),
+          p_kg_per_unit_snapshot: num(consumption.kgPerUnitSnapshot),
+          p_notes: str(consumption.notes)
+        });
+        error = result.error;
       } else if (op.kind === 'update-farm') {
         const result = await sb.from('farms').update({
           name: str(op.farm.name, farm.name),
@@ -176,7 +241,7 @@ export async function POST(req: Request) {
         error = result.error;
       }
 
-      if (!['add-batch', 'update-batch', 'add-expense', 'update-expense', 'delete-expense', 'add-sale', 'update-sale', 'delete-sale', 'update-farm'].includes((op as { kind?: string }).kind ?? '')) {
+      if (!['add-batch', 'update-batch', 'add-expense', 'update-expense', 'delete-expense', 'add-sale', 'update-sale', 'delete-sale', 'add-population-movement', 'add-feed-product', 'add-feed-inventory', 'add-feed-consumption', 'update-farm'].includes((op as { kind?: string }).kind ?? '')) {
         failure = 'Unsupported sync operation. The record was kept in the local queue.';
         break;
       }
