@@ -31,7 +31,7 @@ async function scopedKey(): Promise<string> {
     const { data } = await createBrowserClientApp().auth.getSession();
     userId = data.session?.user.id ?? '';
   } catch {
-    // The last authenticated owner is used only when the cached auth session cannot be read.
+    // Do not fall back to another account's browser cache.
   }
   if (!userId) throw new Error('Your account could not be identified. Sign in again before opening offline records.');
 
