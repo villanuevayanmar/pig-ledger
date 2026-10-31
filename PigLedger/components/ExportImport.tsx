@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import Icon from '@/components/Icon';
 import { importAll } from '@/app/actions';
@@ -8,8 +7,8 @@ import { today } from '@/lib/format';
 import type { Expense, Farm, Sale, Totals } from '@/lib/types';
 
 /**
- * Backup panel: download a JSON copy of the ledger, restore it later,
- * print the ledger, or wipe everything.
+ * Backup panel: download a JSON copy of the ledger, safely merge a backup,
+ * or print the ledger.
  */
 export default function ExportImport({
   farm,
@@ -22,7 +21,6 @@ export default function ExportImport({
   sales: Sale[];
   totals: Totals;
 }) {
-  const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
@@ -66,10 +64,15 @@ export default function ExportImport({
     if (!confirm('Merge this backup? Existing records will not be deleted or overwritten. Duplicate IDs will be skipped.')) return;
 
     setBusy(true);
-    const result = await importAll(text);
-    setBusy(false);
-    alert(result.message);
-    if (result.ok) router.refresh();
+    try {
+      const result = await importAll(text);
+      alert(result.message);
+      if (result.ok) window.location.reload();
+    } catch {
+      alert('Backup merge failed. Your existing records were not intentionally deleted. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
 
