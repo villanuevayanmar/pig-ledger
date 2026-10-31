@@ -149,7 +149,11 @@ export async function syncLedgerNow(): Promise<LocalLedger> {
   }
   try {
     const fresh = await pullServerLedger();
-    if (fresh) return fresh;
+    if (fresh) {
+      fresh.syncError = null;
+      await saveLocalLedger(fresh);
+      return fresh;
+    }
   } catch {
     // offline — fall through
   }
