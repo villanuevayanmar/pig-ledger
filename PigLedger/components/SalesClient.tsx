@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import SyncStatus from '@/components/SyncStatus';
+import LoadError from '@/components/LoadError';
 import Icon from '@/components/Icon';
 import { fmt, num, round2, today } from '@/lib/format';
 import { computeTotals } from '@/lib/totals';
@@ -19,11 +20,18 @@ export default function SalesClient() {
   const [ledger, setLedger] = useState<LocalLedger | null>(null);
   const [weightKg, setWeightKg] = useState('');
   const [pricePerKg, setPricePerKg] = useState('');
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    loadLocalLedger().then(setLedger);
-    syncLedgerNow().then(setLedger).catch(() => {});
+  const loadSales = useCallback(async () => {
+    setLoadError('');
+    try {
+      setLedger(await syncLedgerNow());
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not load sales records.');
+    }
   }, []);
+
+  useEffect(() => { void loadSales(); }, [loadSales]);
 
   async function handleAdd(formData: FormData) {
     const w = num(formData.get('weightKg'));
@@ -36,7 +44,8 @@ export default function SalesClient() {
       weightKg: w,
       pricePerKg: p,
       gross: round2(w * p),
-      batchId: String(formData.get('batchId') || '') || null
+      batchId: String(formData.get('batchId') || '') || null,
+      customerId: String(formData.get('customerId') || '') || null
     };
     const local = await loadLocalLedger();
     const op: PendingOp = { kind: 'add-sale', sale };
@@ -49,21 +58,49 @@ export default function SalesClient() {
     syncLedgerNow().then(setLedger).catch(() => {});
   }
 
+  async function handleEdit(formData: FormData) {
+    const id = String(formData.get('id') || '');
+    const local = await loadLocalLedger();
+    const current = local.sales.find((item) => item.id === id);
+    if (!current) return;
+    const weight = Math.max(0, num(formData.get('weightKg')));
+    const price = Math.max(0, num(formData.get('pricePerKg')));
+    const updated: Sale = {
+      ...current,
+      date: String(formData.get('date') || current.date),
+      buyer: String(formData.get('buyer') || '').trim(),
+      heads: Math.max(0, Math.floor(num(formData.get('heads')))),
+      weightKg: weight,
+      pricePerKg: price,
+      gross: round2(weight * price),
+      batchId: String(formData.get('batchId') || '') || null,
+      customerId: String(formData.get('customerId') || '') || null
+    };
+    local.sales = local.sales.map((item) => item.id === id ? updated : item);
+    const addIndex = local.pending.findIndex((op) => op.kind === 'add-sale' && op.sale.id === id);
+    const updateIndex = local.pending.findIndex((op) => op.kind === 'update-sale' && op.sale.id === id);
+    if (addIndex >= 0) local.pending[addIndex] = { kind: 'add-sale', sale: updated };
+    else if (updateIndex >= 0) local.pending[updateIndex] = { kind: 'update-sale', sale: updated };
+    else local.pending = [...local.pending, { kind: 'update-sale', sale: updated }];
+    await saveLocalLedger(local);
+    setLedger({ ...local });
+    syncLedgerNow().then(setLedger).catch(() => {});
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('Delete this sale record? This action cannot be undone.')) return;
     const local = await loadLocalLedger();
     local.sales = local.sales.filter((s) => s.id !== id);
+    local.pending = local.pending.filter((op) => !((op.kind === 'add-sale' || op.kind === 'update-sale') && op.sale.id === id));
     local.pending = [...local.pending, { kind: 'delete-sale', id }];
     await saveLocalLedger(local);
     setLedger({ ...local });
     syncLedgerNow().then(setLedger).catch(() => {});
   }
   if (!ledger) {
-    return (
-      <div className="card text-center">
-        <p className="muted">Loading…</p>
-      </div>
-    );
+    return loadError
+      ? <LoadError message={loadError} onRetry={() => { void loadSales(); }} />
+      : <div className="card text-center"><p className="muted">Loading…</p></div>;
   }
 
   const totals = computeTotals(ledger.expenses, ledger.sales, ledger.farm.pigCount);
@@ -71,7 +108,7 @@ export default function SalesClient() {
 
   return (
     <div className="space-y-4">
-      <SyncStatus pending={ledger.pending.length} onSync={async () => { setLedger(await syncLedgerNow()); }} />
+      <SyncStatus pending={ledger.pending.length} syncError={ledger.syncError} onSync={async () => { setLedger(await syncLedgerNow()); }} />
 
       <div className="flex items-end justify-between gap-3">
         <div>
@@ -97,6 +134,7 @@ export default function SalesClient() {
             <input type="text" name="buyer" className="input" placeholder="e.g. Mang Roger" />
           </label>
         </div>
+        <label className="block"><span className="label">Customer contact (optional)</span><select name="customerId" className="input" defaultValue=""><option value="">No saved customer</option>{ledger.customers.filter((customer) => customer.isActive).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
         <label className="block"><span className="label">Assign to batch (optional)</span><select name="batchId" className="input" defaultValue=""><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
         <div className="grid grid-cols-2 gap-3">
           <label>
@@ -154,6 +192,24 @@ export default function SalesClient() {
                 <p className="mt-1.5 text-xs tabular-nums text-slate-500">
                   {s.weightKg} kg × {fmt(s.pricePerKg)} · Net proceeds {fmt(net)}
                 </p>
+                <details className="mt-3 border-t border-slate-100 pt-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-600">Edit sale</summary>
+                  <form action={handleEdit} className="mt-3 space-y-3">
+                    <input type="hidden" name="id" value={s.id} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Date</span><input className="input" type="date" name="date" defaultValue={s.date} required /></label>
+                      <label><span className="label">Buyer</span><input className="input" name="buyer" defaultValue={s.buyer} /></label>
+                    </div>
+                    <label className="block"><span className="label">Customer contact (optional)</span><select className="input" name="customerId" defaultValue={s.customerId || ''}><option value="">No saved customer</option>{ledger.customers.filter((customer) => customer.isActive).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
+                    <label className="block"><span className="label">Batch</span><select className="input" name="batchId" defaultValue={s.batchId || ''}><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Number of pigs</span><input className="input" type="number" min="0" step="1" name="heads" defaultValue={s.heads} required /></label>
+                      <label><span className="label">Total weight (kg)</span><input className="input" type="number" min="0" step="any" name="weightKg" defaultValue={s.weightKg} required /></label>
+                    </div>
+                    <label className="block"><span className="label">Price per kg (₱)</span><input className="input" type="number" min="0" step="0.01" name="pricePerKg" defaultValue={s.pricePerKg} required /></label>
+                    <button type="submit" className="btn-primary w-full">Save changes</button>
+                  </form>
+                </details>
                 <div className="mt-2 flex justify-end">
                   <button type="button" onClick={() => handleDelete(s.id)} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-rose-600">
                     Delete

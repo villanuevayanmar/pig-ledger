@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import SyncStatus from '@/components/SyncStatus';
+import LoadError from '@/components/LoadError';
 import Icon from '@/components/Icon';
 import { fmt, fmtKg, num, today } from '@/lib/format';
 import { loadLocalLedger, saveLocalLedger, type LocalLedger } from '@/lib/local-store';
@@ -28,17 +29,20 @@ export default function BatchClient() {
   const [showProjection, setShowProjection] = useState(false);
   const [savingProjection, setSavingProjection] = useState(false);
   const [projectionError, setProjectionError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    loadLocalLedger().then((value) => {
-      setLedger(value);
-      setSelectedId(value.batches[0]?.id ?? '');
-    });
-    syncLedgerNow().then((value) => {
+  const loadBatches = useCallback(async () => {
+    setLoadError('');
+    try {
+      const value = await syncLedgerNow();
       setLedger(value);
       setSelectedId((current) => current || value.batches[0]?.id || '');
-    }).catch(() => {});
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not load batches.');
+    }
   }, []);
+
+  useEffect(() => { void loadBatches(); }, [loadBatches]);
 
   const selectedBatch = ledger?.batches.find((batch) => batch.id === selectedId) ?? null;
   const actuals = useMemo(() => {
@@ -116,7 +120,9 @@ export default function BatchClient() {
     syncLedgerNow().then(setLedger).catch(() => {});
   }
 
-  if (!ledger) return <div className="card text-center"><p className="muted">Loading batches…</p></div>;
+  if (!ledger) return loadError
+    ? <LoadError message={loadError} onRetry={() => { void loadBatches(); }} />
+    : <div className="card text-center"><p className="muted">Loading batches…</p></div>;
 
   const projection = selectedBatch?.projection ?? EMPTY_PROJECTION;
   const projectedRevenue = projection.plannedHeads * projection.expectedAvgSaleWeightKg * projection.expectedPricePerKg;
@@ -125,7 +131,7 @@ export default function BatchClient() {
 
   return (
     <div className="space-y-4">
-      <SyncStatus pending={ledger.pending.length} onSync={async () => setLedger(await syncLedgerNow())} />
+      <SyncStatus pending={ledger.pending.length} syncError={ledger.syncError} onSync={async () => setLedger(await syncLedgerNow())} />
       <div className="flex items-start justify-between gap-3">
         <div><h2 className="section-title mb-1">Batches</h2><p className="section-sub">Actual results come from linked transactions. Projections stay separate from the ledger.</p></div>
         <button type="button" onClick={() => setCreating((value) => !value)} className="btn-primary shrink-0"><Icon name="plus" className="h-4 w-4" /> New batch</button>

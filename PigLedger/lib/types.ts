@@ -74,6 +74,7 @@ export type Expense = {
   expenseType?: string;
   itemName?: string;
   kgPerUnit?: number;
+  supplierId?: string | null;
 };
 
 export type Sale = {
@@ -85,6 +86,7 @@ export type Sale = {
   pricePerKg: number;
   gross: number;
   batchId?: string | null;
+  customerId?: string | null;
 };
 
 export type Farm = {
@@ -109,4 +111,122 @@ export type Totals = {
   discrepancies: Record<string, number>;
   netBySale: Record<string, number>;
   issueCount: number;
+};
+
+export type PopulationMovementType =
+  | 'opening' | 'purchase' | 'mortality' | 'transfer_in' | 'transfer_out'
+  | 'adjustment_in' | 'adjustment_out';
+
+export type PopulationMovement = {
+  id: string;
+  farmId: string;
+  batchId: string;
+  movementDate: string;
+  movementType: PopulationMovementType;
+  heads: number;
+  notes: string;
+};
+
+export type FeedProduct = {
+  id: string;
+  farmId: string;
+  name: string;
+  category: string;
+  unit: string;
+  kgPerUnit: number;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type FeedInventoryMovementType = 'purchase' | 'adjustment_in' | 'adjustment_out' | 'waste';
+
+export type FeedInventoryMovement = {
+  id: string;
+  farmId: string;
+  productId: string;
+  movementDate: string;
+  movementType: FeedInventoryMovementType;
+  quantityUnits: number;
+  kgPerUnitSnapshot: number;
+  unitCost: number;
+  notes: string;
+};
+
+export type FeedConsumptionRecord = {
+  id: string;
+  farmId: string;
+  batchId: string;
+  productId: string;
+  consumptionDate: string;
+  quantityUnits: number;
+  kgPerUnitSnapshot: number;
+  notes: string;
+};
+
+export type WeightRecord = {
+  id: string;
+  farmId: string;
+  batchId: string;
+  measuredOn: string;
+  headCount: number;
+  averageWeightKg: number;
+  notes: string;
+};
+
+export type HealthRecordType =
+  | 'observation' | 'illness' | 'treatment' | 'vaccination'
+  | 'deworming' | 'medication' | 'recovery';
+
+export type HealthRecord = {
+  id: string;
+  farmId: string;
+  batchId: string;
+  recordDate: string;
+  recordType: HealthRecordType;
+  title: string;
+  symptoms: string;
+  medicine: string;
+  dosage: string;
+  treatedHeads: number;
+  cost: number;
+  expenseId?: string | null;
+  nextDueDate?: string | null;
+  notes: string;
+};
+
+export type Customer = {
+  id: string;
+  farmId: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type Supplier = {
+  id: string;
+  farmId: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type SalePaymentMethod = 'cash' | 'bank_transfer' | 'e_wallet' | 'check' | 'other';
+
+export type SalePayment = {
+  id: string;
+  farmId: string;
+  saleId: string;
+  paymentDate: string;
+  amount: number;
+  paymentMethod: SalePaymentMethod;
+  reference: string;
+  notes: string;
 };

@@ -1,25 +1,35 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import SummaryCards from '@/components/SummaryCards';
+import LoadError from '@/components/LoadError';
 import SyncStatus from '@/components/SyncStatus';
 import Icon from '@/components/Icon';
 import { fmt, fmtKg } from '@/lib/format';
 import { computeTotals } from '@/lib/totals';
-import { loadLocalLedger, type LocalLedger } from '@/lib/local-store';
+import type { LocalLedger } from '@/lib/local-store';
 import { syncLedgerNow } from '@/components/ExpensesClient';
 
 export default function HomeClient() {
   const [ledger, setLedger] = useState<LocalLedger | null>(null);
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    loadLocalLedger().then(setLedger);
-    syncLedgerNow().then(setLedger).catch(() => {});
+  const loadLedger = useCallback(async () => {
+    setLoadError('');
+    try {
+      setLedger(await syncLedgerNow());
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not load the financial summary.');
+    }
   }, []);
 
+  useEffect(() => { void loadLedger(); }, [loadLedger]);
+
   if (!ledger) {
-    return <div className="card text-center"><p className="muted">Loading financial summary…</p></div>;
+    return loadError
+      ? <LoadError message={loadError} onRetry={() => { void loadLedger(); }} />
+      : <div className="card text-center"><p className="muted">Loading financial summary…</p></div>;
   }
 
   const totals = computeTotals(ledger.expenses, ledger.sales, ledger.farm.pigCount);
@@ -30,7 +40,7 @@ export default function HomeClient() {
 
   return (
     <div className="space-y-4">
-      <SyncStatus pending={ledger.pending.length} onSync={async () => setLedger(await syncLedgerNow())} />
+      <SyncStatus pending={ledger.pending.length} syncError={ledger.syncError} onSync={async () => setLedger(await syncLedgerNow())} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
