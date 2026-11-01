@@ -1,11 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import SyncStatus from '@/components/SyncStatus';
+import LoadError from '@/components/LoadError';
 import Icon from '@/components/Icon';
+import ExportImport from '@/components/ExportImport';
+import { computeTotals } from '@/lib/totals';
 import { num } from '@/lib/format';
 import {
+  hasRecoverableLegacyLedger,
   loadLocalLedger,
+  recoverLegacyLedgerForCurrentUser,
   saveLocalLedger,
   type LocalLedger
 } from '@/lib/local-store';
@@ -13,11 +18,42 @@ import { syncLedgerNow } from '@/components/ExpensesClient';
 
 export default function SettingsClient() {
   const [ledger, setLedger] = useState<LocalLedger | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [legacyRecoveryAvailable, setLegacyRecoveryAvailable] = useState(false);
+  const [recoveringLegacy, setRecoveringLegacy] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState('');
 
-  useEffect(() => {
-    loadLocalLedger().then(setLedger);
-    syncLedgerNow().then(setLedger).catch(() => {});
+  const loadSettings = useCallback(async () => {
+    setLoadError('');
+    try {
+      setLedger(await syncLedgerNow());
+      setLegacyRecoveryAvailable(await hasRecoverableLegacyLedger());
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not load farm settings.');
+    }
   }, []);
+
+  async function handleLegacyRecovery() {
+    const accepted = window.confirm(
+      'Recover the old offline records for this selected farm? Continue only if you recognize these records and they belong to your account. Existing server records will not be deleted.'
+    );
+    if (!accepted) return;
+
+    setRecoveringLegacy(true);
+    setRecoveryMessage('');
+    try {
+      const restored = await recoverLegacyLedgerForCurrentUser();
+      setLedger(restored);
+      setLegacyRecoveryAvailable(false);
+      setRecoveryMessage('Previous offline records were recovered. They remain pending until synchronization completes.');
+    } catch (error) {
+      setRecoveryMessage(error instanceof Error ? error.message : 'Could not recover the previous offline ledger.');
+    } finally {
+      setRecoveringLegacy(false);
+    }
+  }
+
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
 
   async function handleFarm(formData: FormData) {
     const local = await loadLocalLedger();
@@ -34,16 +70,14 @@ export default function SettingsClient() {
   }
 
   if (!ledger) {
-    return (
-      <div className="card text-center">
-        <p className="muted">Loading…</p>
-      </div>
-    );
+    return loadError
+      ? <LoadError message={loadError} onRetry={() => { void loadSettings(); }} />
+      : <div className="card text-center"><p className="muted">Loading…</p></div>;
   }
 
   return (
     <div className="space-y-4">
-      <SyncStatus pending={ledger.pending.length} onSync={async () => { setLedger(await syncLedgerNow()); }} />
+      <SyncStatus pending={ledger.pending.length} syncError={ledger.syncError} onSync={async () => { setLedger(await syncLedgerNow()); }} />
 
       <div>
         <h2 className="section-title">Settings</h2>
@@ -81,6 +115,32 @@ export default function SettingsClient() {
           <li>Download a JSON backup every week from the Settings page.</li>
         </ol>
       </details>
+
+      {legacyRecoveryAvailable ? (
+        <section className="card space-y-3 border border-amber-200" aria-labelledby="legacy-recovery-title">
+          <div>
+            <h3 id="legacy-recovery-title" className="font-semibold text-slate-900">Previous offline records found</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              This browser contains an older offline ledger for the selected farm. It was not imported automatically to avoid mixing records between accounts. Recover it only when you recognize the records and know they belong to your account.
+            </p>
+          </div>
+          <button type="button" className="btn-secondary w-full" onClick={handleLegacyRecovery} disabled={recoveringLegacy}>
+            {recoveringLegacy ? 'Recovering records…' : 'Recover previous offline records'}
+          </button>
+          {recoveryMessage ? <p className="text-sm text-slate-700" role="status">{recoveryMessage}</p> : null}
+        </section>
+      ) : null}
+
+      <div>
+        <h3 className="section-title">Backup and Restore</h3>
+        <p className="section-sub">Download a copy or safely merge a previous backup.</p>
+      </div>
+      <ExportImport
+        farm={ledger.farm}
+        expenses={ledger.expenses}
+        sales={ledger.sales}
+        totals={computeTotals(ledger.expenses, ledger.sales, ledger.farm.pigCount)}
+      />
     </div>
   );
 }

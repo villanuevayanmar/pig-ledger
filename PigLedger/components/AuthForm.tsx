@@ -4,10 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Icon from '@/components/Icon';
 import { createBrowserClientApp } from '@/lib/supabase/client';
-import { defaultLedger, saveLocalLedger } from '@/lib/local-store';
-
-const OWNER_KEY = 'pig-ledger-owner';
-
 type Mode = 'signin' | 'signup';
 type Notice = { tone: 'error' | 'ok'; text: string } | null;
 
@@ -15,21 +11,6 @@ type Notice = { tone: 'error' | 'ok'; text: string } | null;
 function safeNext(raw: string | null): string {
   if (raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/login')) return raw;
   return '/';
-}
-
-/**
- * This device keeps an offline copy of the ledger. When a DIFFERENT
- * account signs in on the same device, the previous account's cached
- * records are cleared so records never leak between users.
- */
-async function claimLocalCopy(userId: string): Promise<void> {
-  try {
-    const last = window.localStorage.getItem(OWNER_KEY);
-    if (last && last !== userId) await saveLocalLedger(defaultLedger());
-    window.localStorage.setItem(OWNER_KEY, userId);
-  } catch {
-    // Storage unavailable — continue without switching.
-  }
 }
 
 /**
@@ -69,7 +50,6 @@ export default function AuthForm({ next }: { next: string | null }) {
           });
           return;
         }
-        if (data.user) await claimLocalCopy(data.user.id);
         setNotice({ tone: 'ok', text: 'Signed in. Opening your ledger…' });
         router.push(target);
         router.refresh();
@@ -81,7 +61,6 @@ export default function AuthForm({ next }: { next: string | null }) {
         }
         if (data.session && data.user) {
           // Email confirmation is disabled — session issued immediately.
-          await claimLocalCopy(data.user.id);
           setNotice({ tone: 'ok', text: 'Account created. Opening your ledger…' });
           router.push(target);
           router.refresh();

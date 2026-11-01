@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import SyncStatus from '@/components/SyncStatus';
+import LoadError from '@/components/LoadError';
 import Icon from '@/components/Icon';
 import { createBrowserClientApp } from '@/lib/supabase/client';
 import { fmt, fmtDate, num, round2, today } from '@/lib/format';
@@ -15,7 +16,7 @@ import {
   type PendingOp
 } from '@/lib/local-store';
 import { CATEGORIES, FEED_CATEGORIES, UNITS } from '@/lib/types';
-import type { Batch, Expense } from '@/lib/types';
+import type { Batch, Expense, PopulationMovement, FeedProduct, FeedInventoryMovement, FeedConsumptionRecord, WeightRecord, HealthRecord, Customer, Supplier, SalePayment } from '@/lib/types';
 
 export async function pullServerLedger() {
   const sb = createBrowserClientApp();
@@ -23,32 +24,41 @@ export async function pullServerLedger() {
   const uid = authData.user?.id;
   if (!uid) return null; // Not signed in — keep the local copy only.
 
-  let { data: farms } = await sb
+  const { data: visibleFarms, error: farmReadError } = await sb
     .from('farms')
-    .select('id, name, pig_count, start_date')
-    .eq('user_id', uid)
-    .order('created_at', { ascending: true })
-    .limit(1);
+    .select('id, name, pig_count, start_date, user_id, created_at')
+    .order('created_at', { ascending: true });
+  if (farmReadError) throw new Error('Could not load farms: ' + farmReadError.message);
 
-  if (!farms || farms.length === 0) {
-    // One-time migration: claim a legacy farm that has no owner yet.
-    const { data: orphans } = await sb
-      .from('farms')
-      .select('id, name, pig_count, start_date')
-      .is('user_id', null)
-      .order('created_at', { ascending: true })
-      .limit(1);
-    if (orphans && orphans.length > 0) {
-      const { data: claimed } = await sb
+  // Rows with a null owner are legacy records; claim one only when there is
+  // no already-owned or membership-visible farm to use.
+  let farms = (visibleFarms ?? []).filter((item) => Boolean(item.user_id));
+  if (farms.length === 0) {
+    const orphan = (visibleFarms ?? []).find((item) => !item.user_id);
+    if (orphan) {
+      const { data: claimed, error: claimError } = await sb
         .from('farms')
         .update({ user_id: uid })
-        .eq('id', orphans[0].id)
-        .select('id');
-      if (claimed && claimed.length > 0) farms = [orphans[0]];
+        .eq('id', orphan.id)
+        .select('id, name, pig_count, start_date, user_id, created_at')
+        .maybeSingle();
+      if (!claimError && claimed) farms = [claimed];
     }
   }
-  if (!farms || farms.length === 0) return null;
-  const f = farms[0] as { id: string; name: string; pig_count: number; start_date: string };
+
+  if (farms.length === 0) {
+    const { data: created, error: createError } = await sb
+      .from('farms')
+      .insert({ name: 'My Piggery', pig_count: 0, user_id: uid })
+      .select('id, name, pig_count, start_date, user_id, created_at')
+      .single();
+    if (createError) throw new Error('Could not create farm: ' + createError.message);
+    farms = [created];
+  }
+
+  const activeFarmId = window.localStorage.getItem('pig-ledger-active-farm:' + uid);
+  const f = (activeFarmId ? farms.find((item) => item.id === activeFarmId) : null) ?? farms[0];
+
   const farm = {
     id: f.id,
     name: f.name || 'My Piggery',
@@ -59,9 +69,7 @@ export async function pullServerLedger() {
     .from('batches')
     .select('id, farm_id, name, start_date, target_sale_date, initial_heads, status, projection, created_at, deleted_at')
     .eq('farm_id', farm.id)
-    .eq('user_id', uid)
     .is('deleted_at', null)
-    .neq('status', 'archived')
     .order('start_date', { ascending: false });
   if (batchReadError) throw new Error('Could not refresh batches.');
   const batches: Batch[] = ((bRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
@@ -75,20 +83,108 @@ export async function pullServerLedger() {
     projection: (r.projection && typeof r.projection === 'object' ? r.projection : {}) as Batch['projection'],
     createdAt: String(r.created_at ?? '')
   }));
-  const { data: eRows, error: expenseReadError } = await sb
+  let missingBusinessColumns = false;
+  const expenseWithSupplier = await sb
     .from('expenses')
-    .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name')
+    .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name, supplier_id')
     .eq('farm_id', farm.id)
-    .eq('user_id', uid)
+
     .order('date', { ascending: false });
+  let eRows = (expenseWithSupplier.data ?? []) as Array<Record<string, unknown>>;
+  let expenseReadError = expenseWithSupplier.error;
+  if (expenseReadError && /supplier_id/.test(expenseReadError.message)) {
+    const legacyExpenses = await sb
+      .from('expenses')
+      .select('id, date, category, description, qty, unit, price, kg_per_unit, line_total, batch_id, expense_type, item_name')
+      .eq('farm_id', farm.id)
+
+      .order('date', { ascending: false });
+    eRows = (legacyExpenses.data ?? []) as Array<Record<string, unknown>>;
+    expenseReadError = legacyExpenses.error;
+    missingBusinessColumns = true;
+  }
   if (expenseReadError) throw new Error('Could not refresh expenses.');
-  const { data: sRows, error: salesReadError } = await sb
+
+  const salesWithCustomer = await sb
     .from('sales')
-    .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id')
+    .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id, customer_id')
     .eq('farm_id', farm.id)
-    .eq('user_id', uid)
+
     .order('date', { ascending: false });
+  let sRows = (salesWithCustomer.data ?? []) as Array<Record<string, unknown>>;
+  let salesReadError = salesWithCustomer.error;
+  if (salesReadError && /customer_id/.test(salesReadError.message)) {
+    const legacySales = await sb
+      .from('sales')
+      .select('id, date, buyer, heads, weight_kg, price_per_kg, gross, batch_id')
+      .eq('farm_id', farm.id)
+
+      .order('date', { ascending: false });
+    sRows = (legacySales.data ?? []) as Array<Record<string, unknown>>;
+    salesReadError = legacySales.error;
+    missingBusinessColumns = true;
+  }
   if (salesReadError) throw new Error('Could not refresh sales.');
+  const [populationResult, productResult, inventoryResult, consumptionResult] = await Promise.all([
+    sb.from('population_movements')
+      .select('id, farm_id, batch_id, movement_date, movement_type, heads, notes')
+      .eq('farm_id', farm.id).order('movement_date', { ascending: false }),
+    sb.from('feed_products')
+      .select('id, farm_id, name, category, unit, kg_per_unit, is_active, created_at')
+      .eq('farm_id', farm.id).order('name', { ascending: true }),
+    sb.from('feed_inventory_movements')
+      .select('id, farm_id, product_id, movement_date, movement_type, quantity_units, kg_per_unit_snapshot, unit_cost, notes')
+      .eq('farm_id', farm.id).order('movement_date', { ascending: false }),
+    sb.from('feed_consumption')
+      .select('id, farm_id, batch_id, product_id, consumption_date, quantity_units, kg_per_unit_snapshot, notes')
+      .eq('farm_id', farm.id).order('consumption_date', { ascending: false })
+  ]);
+  const operationErrors = [populationResult.error, productResult.error, inventoryResult.error, consumptionResult.error].filter(Boolean);
+  const missingOperationsSchema = operationErrors.some((error) =>
+    error?.code === '42P01' || error?.code === 'PGRST205' ||
+    /could not find the table|relation .* does not exist/i.test(error?.message ?? '')
+  );
+  if (operationErrors.length > 0 && !missingOperationsSchema) {
+    throw new Error('Could not refresh farm operations records.');
+  }
+  const [weightResult, healthResult] = await Promise.all([
+    sb.from('weight_records')
+      .select('id, farm_id, batch_id, measured_on, head_count, average_weight_kg, notes')
+      .eq('farm_id', farm.id).order('measured_on', { ascending: false }),
+    sb.from('health_records')
+      .select('id, farm_id, batch_id, record_date, record_type, title, symptoms, medicine, dosage, treated_heads, cost, expense_id, next_due_date, notes')
+      .eq('farm_id', farm.id).order('record_date', { ascending: false })
+  ]);
+  const monitoringErrors = [weightResult.error, healthResult.error].filter(Boolean);
+  const missingMonitoringSchema = monitoringErrors.some((error) =>
+    error?.code === '42P01' || error?.code === 'PGRST205' ||
+    /could not find the table|relation .* does not exist/i.test(error?.message ?? '')
+  );
+  if (monitoringErrors.length > 0 && !missingMonitoringSchema) {
+    throw new Error('Could not refresh animal monitoring records.');
+  }
+  const [customerResult, supplierResult, paymentResult] = await Promise.all([
+    sb.from('customers')
+      .select('id, farm_id, name, phone, email, address, notes, is_active, created_at')
+      .eq('farm_id', farm.id).order('name', { ascending: true }),
+    sb.from('suppliers')
+      .select('id, farm_id, name, phone, email, address, notes, is_active, created_at')
+      .eq('farm_id', farm.id).order('name', { ascending: true }),
+    sb.from('sale_payments')
+      .select('id, farm_id, sale_id, payment_date, amount, payment_method, reference, notes')
+      .eq('farm_id', farm.id).order('payment_date', { ascending: false })
+  ]);
+  const businessErrors = [customerResult.error, supplierResult.error, paymentResult.error].filter(Boolean);
+  const missingBusinessSchema = missingBusinessColumns || businessErrors.some((error) =>
+    error?.code === '42P01' || error?.code === 'PGRST205' ||
+    /could not find the table|relation .* does not exist/i.test(error?.message ?? '')
+  );
+  if (businessErrors.length > 0 && !missingBusinessSchema) {
+    throw new Error('Could not refresh business records.');
+  }
+
+
+
   const expenses: Expense[] = ((eRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
     id: String(r.id),
     date: String(r.date ?? ''),
@@ -101,7 +197,8 @@ export async function pullServerLedger() {
     lineTotal: num(r.line_total),
     batchId: r.batch_id ? String(r.batch_id) : null,
     expenseType: String(r.expense_type ?? ''),
-    itemName: String(r.item_name ?? r.description ?? '')
+    itemName: String(r.item_name ?? r.description ?? ''),
+    supplierId: r.supplier_id ? String(r.supplier_id) : null
   }));
   const sales = ((sRows ?? []) as Array<Record<string, unknown>>).map((r) => ({
     id: String(r.id),
@@ -111,40 +208,173 @@ export async function pullServerLedger() {
     weightKg: num(r.weight_kg),
     pricePerKg: num(r.price_per_kg),
     gross: num(r.gross),
-    batchId: r.batch_id ? String(r.batch_id) : null
+    batchId: r.batch_id ? String(r.batch_id) : null,
+    customerId: r.customer_id ? String(r.customer_id) : null
   }));
-  return replaceLocalWithServer(farm, expenses, sales, batches);
+
+  const operations: {
+    schemaReady: boolean;
+    populationMovements: PopulationMovement[];
+    feedProducts: FeedProduct[];
+    feedInventoryMovements: FeedInventoryMovement[];
+    feedConsumption: FeedConsumptionRecord[];
+    weightRecords: WeightRecord[];
+    healthRecords: HealthRecord[];
+    monitoringSchemaReady: boolean;
+    customers: Customer[];
+    suppliers: Supplier[];
+    salePayments: SalePayment[];
+    businessSchemaReady: boolean;
+  } = missingOperationsSchema ? {
+    schemaReady: false,
+    populationMovements: [],
+    feedProducts: [],
+    feedInventoryMovements: [],
+    feedConsumption: [],
+    weightRecords: [],
+    healthRecords: [],
+    monitoringSchemaReady: !missingMonitoringSchema,
+    customers: [],
+    suppliers: [],
+    salePayments: [],
+    businessSchemaReady: false
+  } : {
+    schemaReady: true,
+    populationMovements: (populationResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), batchId: String(r.batch_id),
+      movementDate: String(r.movement_date), movementType: String(r.movement_type) as PopulationMovement['movementType'],
+      heads: Math.round(num(r.heads)), notes: String(r.notes ?? '')
+    })),
+    feedProducts: (productResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), name: String(r.name),
+      category: String(r.category), unit: String(r.unit), kgPerUnit: num(r.kg_per_unit),
+      isActive: Boolean(r.is_active), createdAt: String(r.created_at ?? '')
+    })),
+    feedInventoryMovements: (inventoryResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), productId: String(r.product_id),
+      movementDate: String(r.movement_date), movementType: String(r.movement_type) as FeedInventoryMovement['movementType'],
+      quantityUnits: num(r.quantity_units), kgPerUnitSnapshot: num(r.kg_per_unit_snapshot),
+      unitCost: num(r.unit_cost), notes: String(r.notes ?? '')
+    })),
+    feedConsumption: (consumptionResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), batchId: String(r.batch_id),
+      productId: String(r.product_id), consumptionDate: String(r.consumption_date),
+      quantityUnits: num(r.quantity_units), kgPerUnitSnapshot: num(r.kg_per_unit_snapshot),
+      notes: String(r.notes ?? '')
+    })),
+    weightRecords: missingMonitoringSchema ? [] : (weightResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), batchId: String(r.batch_id),
+      measuredOn: String(r.measured_on), headCount: Math.round(num(r.head_count)),
+      averageWeightKg: num(r.average_weight_kg), notes: String(r.notes ?? '')
+    })),
+    healthRecords: missingMonitoringSchema ? [] : (healthResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), batchId: String(r.batch_id),
+      recordDate: String(r.record_date), recordType: String(r.record_type) as HealthRecord['recordType'],
+      title: String(r.title), symptoms: String(r.symptoms ?? ''), medicine: String(r.medicine ?? ''),
+      dosage: String(r.dosage ?? ''), treatedHeads: Math.round(num(r.treated_heads)), cost: num(r.cost),
+      expenseId: r.expense_id ? String(r.expense_id) : null,
+      nextDueDate: r.next_due_date ? String(r.next_due_date) : null, notes: String(r.notes ?? '')
+    })),
+    monitoringSchemaReady: !missingMonitoringSchema,
+    customers: missingBusinessSchema ? [] : (customerResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), name: String(r.name),
+      phone: String(r.phone ?? ''), email: String(r.email ?? ''), address: String(r.address ?? ''),
+      notes: String(r.notes ?? ''), isActive: Boolean(r.is_active), createdAt: String(r.created_at ?? '')
+    })),
+    suppliers: missingBusinessSchema ? [] : (supplierResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), name: String(r.name),
+      phone: String(r.phone ?? ''), email: String(r.email ?? ''), address: String(r.address ?? ''),
+      notes: String(r.notes ?? ''), isActive: Boolean(r.is_active), createdAt: String(r.created_at ?? '')
+    })),
+    salePayments: missingBusinessSchema ? [] : (paymentResult.data ?? []).map((r) => ({
+      id: String(r.id), farmId: String(r.farm_id), saleId: String(r.sale_id),
+      paymentDate: String(r.payment_date), amount: num(r.amount),
+      paymentMethod: String(r.payment_method) as SalePayment['paymentMethod'],
+      reference: String(r.reference ?? ''), notes: String(r.notes ?? '')
+    })),
+    businessSchemaReady: !missingBusinessSchema
+  };
+  return replaceLocalWithServer(farm, expenses, sales, batches, operations);
 }
 
 /** Push queue to /api/sync, then pull the fresh server copy. */
-export async function syncLedgerNow(): Promise<LocalLedger> {
-  const local = await loadLocalLedger();
-  if (local.pending.length > 0) {
+let syncInFlight: Promise<LocalLedger> | null = null;
+
+async function performSyncLedgerNow(): Promise<LocalLedger> {
+  let local = await loadLocalLedger();
+
+  // Bind first-use offline data to the explicitly selected/available farm
+  // before sending any queued records. Never guess a user's first farm.
+  if (local.farm.id === 'local-farm') {
+    try {
+      const scoped = await pullServerLedger();
+      if (scoped) local = scoped;
+    } catch {
+      // Stay local-only; do not sync to an arbitrary farm while disconnected.
+    }
+  }
+
+  if (local.pending.length > 0 && local.farm.id !== 'local-farm') {
     try {
       const res = await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ops: local.pending })
+        body: JSON.stringify({ farmId: local.farm.id !== 'local-farm' ? local.farm.id : null, ops: local.pending })
       });
       const json = await res.json();
-      if (json?.ok) {
-        const completed = Number.isInteger(json.completedOps) ? Math.max(0, Math.min(local.pending.length, json.completedOps)) : local.pending.length;
-        if (completed > 0) {
-          local.pending = local.pending.slice(completed);
-          await saveLocalLedger(local);
+      const completed = Number.isInteger(json?.completedOps)
+        ? Math.max(0, Math.min(local.pending.length, json.completedOps))
+        : 0;
+      if (completed > 0) {
+        const completedOps = local.pending.slice(0, completed);
+        const latest = await loadLocalLedger();
+        const remaining = [...latest.pending];
+        for (const completedOp of completedOps) {
+          const index = remaining.findIndex((item) => JSON.stringify(item) === JSON.stringify(completedOp));
+          if (index >= 0) remaining.splice(index, 1);
         }
+        latest.pending = remaining;
+        local = latest;
+        await saveLocalLedger(local);
       }
+      if (!res.ok || json?.ok !== true || local.pending.length > 0) {
+        const latest = await loadLocalLedger();
+        latest.syncError = String(json?.warning || json?.message || 'Some records could not be synchronized. They remain pending.');
+        await saveLocalLedger(latest);
+        return latest;
+      }
+      local.syncError = null;
+      await saveLocalLedger(local);
     } catch {
-      return local; // still offline — keep queue
+      const latest = await loadLocalLedger();
+      latest.syncError = 'Could not reach the sync service. Pending records are still saved on this device.';
+      await saveLocalLedger(latest);
+      return latest;
     }
   }
   try {
     const fresh = await pullServerLedger();
-    if (fresh) return fresh;
+    if (fresh) {
+      fresh.syncError = null;
+      await saveLocalLedger(fresh);
+      return fresh;
+    }
   } catch {
     // offline — fall through
   }
   return loadLocalLedger();
+}
+
+export function syncLedgerNow(): Promise<LocalLedger> {
+  if (syncInFlight) {
+    return syncInFlight.then(() => syncLedgerNow());
+  }
+  const task = performSyncLedgerNow();
+  const wrapped = task.finally(() => {
+    if (syncInFlight === wrapped) syncInFlight = null;
+  });
+  syncInFlight = wrapped;
+  return wrapped;
 }
 
 export default function ExpensesClient() {
@@ -153,11 +383,18 @@ export default function ExpensesClient() {
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState('Booster');
   const [expenseType, setExpenseType] = useState('feed');
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    loadLocalLedger().then(setLedger);
-    syncLedgerNow().then(setLedger).catch(() => {});
+  const loadExpenses = useCallback(async () => {
+    setLoadError('');
+    try {
+      setLedger(await syncLedgerNow());
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not load expense records.');
+    }
   }, []);
+
+  useEffect(() => { void loadExpenses(); }, [loadExpenses]);
 
   async function handleAdd(formData: FormData) {
     const q = num(formData.get('qty'));
@@ -176,6 +413,7 @@ export default function ExpensesClient() {
       kgPerUnit: Math.max(0, num(formData.get('kgPerUnit'))),
       lineTotal: round2(q * p),
       batchId: String(formData.get('batchId') || '') || null,
+      supplierId: String(formData.get('supplierId') || '') || null,
       expenseType,
       itemName: description
     };
@@ -192,10 +430,45 @@ export default function ExpensesClient() {
     syncLedgerNow().then(setLedger).catch(() => {});
   }
 
+  async function handleEdit(formData: FormData) {
+    const id = String(formData.get('id') || '');
+    const local = await loadLocalLedger();
+    const current = local.expenses.find((item) => item.id === id);
+    if (!current) return;
+    const qty = Math.max(0, num(formData.get('qty')));
+    const price = Math.max(0, num(formData.get('price')));
+    const description = String(formData.get('description') || '').trim();
+    const updated: Expense = {
+      ...current,
+      date: String(formData.get('date') || current.date),
+      category: String(formData.get('category') || current.category),
+      description,
+      itemName: description,
+      qty,
+      unit: String(formData.get('unit') || current.unit),
+      price,
+      kgPerUnit: Math.max(0, num(formData.get('kgPerUnit'))),
+      lineTotal: round2(qty * price),
+      batchId: String(formData.get('batchId') || '') || null,
+      supplierId: String(formData.get('supplierId') || '') || null,
+      expenseType: String(formData.get('expenseType') || current.expenseType || 'other')
+    };
+    local.expenses = local.expenses.map((item) => item.id === id ? updated : item);
+    const addIndex = local.pending.findIndex((op) => op.kind === 'add-expense' && op.expense.id === id);
+    const updateIndex = local.pending.findIndex((op) => op.kind === 'update-expense' && op.expense.id === id);
+    if (addIndex >= 0) local.pending[addIndex] = { kind: 'add-expense', expense: updated };
+    else if (updateIndex >= 0) local.pending[updateIndex] = { kind: 'update-expense', expense: updated };
+    else local.pending = [...local.pending, { kind: 'update-expense', expense: updated }];
+    await saveLocalLedger(local);
+    setLedger({ ...local });
+    syncLedgerNow().then(setLedger).catch(() => {});
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('Delete this expense record? This action cannot be undone.')) return;
     const local = await loadLocalLedger();
     local.expenses = local.expenses.filter((e) => e.id !== id);
+    local.pending = local.pending.filter((op) => !((op.kind === 'add-expense' || op.kind === 'update-expense') && op.expense.id === id));
     local.pending = [...local.pending, { kind: 'delete-expense', id }];
     await saveLocalLedger(local);
     setLedger({ ...local });
@@ -203,11 +476,9 @@ export default function ExpensesClient() {
   }
 
   if (!ledger) {
-    return (
-      <div className="card text-center">
-        <p className="muted">Loading…</p>
-      </div>
-    );
+    return loadError
+      ? <LoadError message={loadError} onRetry={() => { void loadExpenses(); }} />
+      : <div className="card text-center"><p className="muted">Loading…</p></div>;
   }
 
   const totals = computeTotals(ledger.expenses, ledger.sales, ledger.farm.pigCount);
@@ -215,7 +486,7 @@ export default function ExpensesClient() {
 
   return (
     <div className="space-y-4">
-      <SyncStatus pending={ledger.pending.length} onSync={async () => { setLedger(await syncLedgerNow()); }} />
+      <SyncStatus pending={ledger.pending.length} syncError={ledger.syncError} onSync={async () => { setLedger(await syncLedgerNow()); }} />
 
       <div className="flex items-end justify-between gap-3">
         <div>
@@ -263,6 +534,7 @@ export default function ExpensesClient() {
         <div className="grid grid-cols-2 gap-3">
           <label><span className="label">Expense type</span><select name="expenseType" className="input" value={expenseType} onChange={(event) => setExpenseType(event.target.value)}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="electricity">Electricity</option><option value="labor">Labor</option><option value="utilities">Utilities</option><option value="other">Other</option></select></label>
           <label><span className="label">Assign to batch (optional)</span><select name="batchId" className="input" defaultValue=""><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
+        <label className="block"><span className="label">Supplier (optional)</span><select name="supplierId" className="input" defaultValue=""><option value="">No saved supplier</option>{ledger.suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
         </div>
         <label className="block">
           <span className="label">Description</span>
@@ -338,6 +610,31 @@ export default function ExpensesClient() {
                     total is {fmt(e.lineTotal)}.
                   </p>
                 ) : null}
+                <details className="mt-3 border-t border-slate-100 pt-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-600">Edit expense</summary>
+                  <form action={handleEdit} className="mt-3 space-y-3">
+                    <input type="hidden" name="id" value={e.id} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Date</span><input className="input" type="date" name="date" defaultValue={e.date} required /></label>
+                      <label><span className="label">Category</span><select className="input" name="category" defaultValue={e.category}>{CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                    </div>
+                    <label className="block"><span className="label">Description</span><input className="input" name="description" defaultValue={e.description} required /></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Quantity</span><input className="input" type="number" min="0" step="any" name="qty" defaultValue={e.qty} required /></label>
+                      <label><span className="label">Unit</span><select className="input" name="unit" defaultValue={e.unit}>{UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Unit price (₱)</span><input className="input" type="number" min="0" step="0.01" name="price" defaultValue={e.price} required /></label>
+                      <label><span className="label">Kg per unit</span><input className="input" type="number" min="0" step="any" name="kgPerUnit" defaultValue={e.kgPerUnit ?? 0} /></label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label><span className="label">Expense type</span><select className="input" name="expenseType" defaultValue={e.expenseType || 'other'}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="electricity">Electricity</option><option value="other">Other</option></select></label>
+                      <label><span className="label">Batch</span><select className="input" name="batchId" defaultValue={e.batchId || ''}><option value="">Farm-wide</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
+                    </div>
+                    <label className="block"><span className="label">Supplier (optional)</span><select className="input" name="supplierId" defaultValue={e.supplierId || ''}><option value="">No saved supplier</option>{ledger.suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
+                    <button type="submit" className="btn-primary w-full">Save changes</button>
+                  </form>
+                </details>
                 <div className="mt-2 flex justify-end">
                   <button type="button" onClick={() => handleDelete(e.id)} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-rose-600">
                     Delete

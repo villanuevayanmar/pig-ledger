@@ -6,8 +6,8 @@ export const supabaseConfigured = Boolean(
 );
 
 /** Server-side Supabase client (App Router, uses cookies for the session). */
-export function createClient() {
-  const cookieStore = cookies();
+export async function createClient() {
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

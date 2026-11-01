@@ -11,7 +11,7 @@ const PUBLIC_PATHS = ['/login'];
  * - When Supabase env vars are missing the app runs in setup mode,
  *   so no redirect is applied.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const path = request.nextUrl.pathname;
