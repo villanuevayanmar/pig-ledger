@@ -512,7 +512,7 @@ export default function ExpensesClient() {
       ) : null}
 
       <form action={handleAdd} className="card space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="col-span-1">
             <span className="label">Date</span>
             <input type="date" name="date" defaultValue={today()} className="input" required />
@@ -531,7 +531,7 @@ export default function ExpensesClient() {
           </label>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label><span className="label">Expense type</span><select name="expenseType" className="input" value={expenseType} onChange={(event) => setExpenseType(event.target.value)}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="electricity">Electricity</option><option value="labor">Labor</option><option value="utilities">Utilities</option><option value="other">Other</option></select></label>
           <label><span className="label">Assign to batch (optional)</span><select name="batchId" className="input" defaultValue=""><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
         <label className="block"><span className="label">Supplier (optional)</span><select name="supplierId" className="input" defaultValue=""><option value="">No saved supplier</option>{ledger.suppliers.filter((supplier) => supplier.isActive).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
@@ -540,7 +540,7 @@ export default function ExpensesClient() {
           <span className="label">Description</span>
           <input type="text" name="description" className="input" placeholder="e.g. 5 sacks pre-starter feed" required />
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label>
             <span className="label">Quantity</span>
             <input type="number" name="qty" className="input" inputMode="decimal" min="0" step="any" placeholder="e.g. 5" value={qty} onChange={(e) => setQty(e.target.value)} required />
@@ -614,20 +614,20 @@ export default function ExpensesClient() {
                   <summary className="cursor-pointer text-xs font-semibold text-slate-600">Edit expense</summary>
                   <form action={handleEdit} className="mt-3 space-y-3">
                     <input type="hidden" name="id" value={e.id} />
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <label><span className="label">Date</span><input className="input" type="date" name="date" defaultValue={e.date} required /></label>
                       <label><span className="label">Category</span><select className="input" name="category" defaultValue={e.category}>{CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
                     </div>
                     <label className="block"><span className="label">Description</span><input className="input" name="description" defaultValue={e.description} required /></label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <label><span className="label">Quantity</span><input className="input" type="number" min="0" step="any" name="qty" defaultValue={e.qty} required /></label>
                       <label><span className="label">Unit</span><select className="input" name="unit" defaultValue={e.unit}>{UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <label><span className="label">Unit price (₱)</span><input className="input" type="number" min="0" step="0.01" name="price" defaultValue={e.price} required /></label>
                       <label><span className="label">Kg per unit</span><input className="input" type="number" min="0" step="any" name="kgPerUnit" defaultValue={e.kgPerUnit ?? 0} /></label>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <label><span className="label">Expense type</span><select className="input" name="expenseType" defaultValue={e.expenseType || 'other'}><option value="feed">Feed</option><option value="piglets">Piglets</option><option value="medicine">Medicine</option><option value="electricity">Electricity</option><option value="other">Other</option></select></label>
                       <label><span className="label">Batch</span><select className="input" name="batchId" defaultValue={e.batchId || ''}><option value="">Farm-wide</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
                     </div>

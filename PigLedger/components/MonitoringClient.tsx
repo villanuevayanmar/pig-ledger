@@ -285,7 +285,7 @@ export default function MonitoringClient() {
             </div>
             <form action={handleWeight} className="space-y-3">
               <input type="hidden" name="batchId" value={selectedBatch?.id ?? ''} />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label><span className="label">Measurement date</span><input className="input" type="date" name="measuredOn" defaultValue={today()} required /></label>
                 <label><span className="label">Head count</span><input className="input" type="number" name="headCount" min="1" step="1" required /></label>
               </div>
@@ -316,17 +316,17 @@ export default function MonitoringClient() {
             </div>
             <form action={handleHealth} className="space-y-3">
               <input type="hidden" name="batchId" value={selectedBatch?.id ?? ''} />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label><span className="label">Date</span><input className="input" type="date" name="recordDate" defaultValue={today()} required /></label>
                 <label><span className="label">Record type</span><select className="input" name="recordType">{HEALTH_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
               </div>
               <label className="block"><span className="label">Title / condition</span><input className="input" name="title" placeholder="e.g. Deworming or cough observation" required /></label>
               <label className="block"><span className="label">Symptoms / observation</span><input className="input" name="symptoms" /></label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label><span className="label">Medicine / vaccine</span><input className="input" name="medicine" /></label>
                 <label><span className="label">Dosage / instructions</span><input className="input" name="dosage" /></label>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label><span className="label">Pigs treated</span><input className="input" type="number" min="0" step="1" name="treatedHeads" defaultValue="0" /></label>
                 <label><span className="label">Cost (₱)</span><input className="input" type="number" min="0" step="0.01" name="cost" defaultValue="0" /></label>
               </div>
