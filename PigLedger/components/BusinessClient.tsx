@@ -188,7 +188,7 @@ export default function BusinessClient() {
         </div>
         <form action={handleCustomer} className="space-y-3">
           <label className="block"><span className="label">Customer name</span><input className="input" name="name" required /></label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label><span className="label">Phone</span><input className="input" name="phone" inputMode="tel" /></label>
             <label><span className="label">Email</span><input className="input" name="email" type="email" /></label>
           </div>
@@ -215,7 +215,7 @@ export default function BusinessClient() {
         </div>
         <form action={handleSupplier} className="space-y-3">
           <label className="block"><span className="label">Supplier name</span><input className="input" name="name" required /></label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label><span className="label">Phone</span><input className="input" name="phone" inputMode="tel" /></label>
             <label><span className="label">Email</span><input className="input" name="email" type="email" /></label>
           </div>

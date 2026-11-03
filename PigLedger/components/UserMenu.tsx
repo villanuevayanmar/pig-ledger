@@ -33,7 +33,7 @@ export default function UserMenu({ email }: { email: string | null }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <span
-        className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600"
+        className="hidden min-w-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 sm:inline-flex"
         title={email}
       >
         <Icon name="user" className="h-3.5 w-3.5 shrink-0" />

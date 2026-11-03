@@ -124,7 +124,7 @@ export default function SalesClient() {
       </div>
 
       <form action={handleAdd} className="card space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label>
             <span className="label">Date</span>
             <input type="date" name="date" defaultValue={today()} className="input" required />
@@ -136,7 +136,7 @@ export default function SalesClient() {
         </div>
         <label className="block"><span className="label">Customer contact (optional)</span><select name="customerId" className="input" defaultValue=""><option value="">No saved customer</option>{ledger.customers.filter((customer) => customer.isActive).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
         <label className="block"><span className="label">Assign to batch (optional)</span><select name="batchId" className="input" defaultValue=""><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label>
             <span className="label">Number of Heads</span>
             <input type="number" name="heads" className="input" inputMode="numeric" min="0" step="1" placeholder="e.g. 12" />
@@ -196,13 +196,13 @@ export default function SalesClient() {
                   <summary className="cursor-pointer text-xs font-semibold text-slate-600">Edit sale</summary>
                   <form action={handleEdit} className="mt-3 space-y-3">
                     <input type="hidden" name="id" value={s.id} />
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <label><span className="label">Date</span><input className="input" type="date" name="date" defaultValue={s.date} required /></label>
                       <label><span className="label">Buyer</span><input className="input" name="buyer" defaultValue={s.buyer} /></label>
                     </div>
                     <label className="block"><span className="label">Customer contact (optional)</span><select className="input" name="customerId" defaultValue={s.customerId || ''}><option value="">No saved customer</option>{ledger.customers.filter((customer) => customer.isActive).map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
                     <label className="block"><span className="label">Batch</span><select className="input" name="batchId" defaultValue={s.batchId || ''}><option value="">Farm-wide / unassigned</option>{ledger.batches.filter((batch) => batch.status !== 'archived').map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <label><span className="label">Number of pigs</span><input className="input" type="number" min="0" step="1" name="heads" defaultValue={s.heads} required /></label>
                       <label><span className="label">Total weight (kg)</span><input className="input" type="number" min="0" step="any" name="weightKg" defaultValue={s.weightKg} required /></label>
                     </div>

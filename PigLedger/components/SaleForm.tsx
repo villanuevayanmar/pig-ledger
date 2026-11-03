@@ -44,7 +44,7 @@ export default function SaleForm({
 
   return (
     <form ref={formRef} action={handleSubmit} className="card space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label>
           <span className="label">Date</span>
           <input type="date" name="date" defaultValue={today()} className="input" required />
@@ -55,7 +55,7 @@ export default function SaleForm({
         </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label>
           <span className="label">Number of Heads</span>
           <input

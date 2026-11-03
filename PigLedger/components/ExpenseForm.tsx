@@ -33,7 +33,7 @@ export default function ExpenseForm() {
 
   return (
     <form ref={formRef} action={handleSubmit} className="card space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="col-span-1">
           <span className="label">Date</span>
           <input type="date" name="date" defaultValue={today()} className="input" required />
@@ -61,7 +61,7 @@ export default function ExpenseForm() {
         />
       </label>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label>
           <span className="label">Quantity</span>
           <input

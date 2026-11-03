@@ -141,7 +141,7 @@ export default function BatchClient() {
         <form action={handleCreate} className="card space-y-3">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Create batch</h3>
           <label className="block"><span className="label">Batch name</span><input name="name" className="input" placeholder="e.g. Batch October 2026" required /></label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label><span className="label">Start date</span><input type="date" name="startDate" defaultValue={today()} className="input" required /></label>
             <label><span className="label">Initial head count</span><input type="number" name="initialHeads" min="0" step="1" inputMode="numeric" className="input" placeholder="Enter count" /></label>
           </div>
@@ -192,7 +192,7 @@ export default function BatchClient() {
                 {showProjection ? (
                   <form key={selectedBatch.id} action={handleSaveProjection} className="space-y-3 border-t border-slate-100 pt-3">
                     <p className="text-xs text-slate-500">Enter expected values. Nothing is saved as an actual expense or sale.</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label><span className="label">Planned head count</span><input name="plannedHeads" type="number" min="0" step="1" className="input" defaultValue={projection.plannedHeads || ''} placeholder="e.g. 12" /></label>
                       <label><span className="label">Expected kg per pig</span><input name="expectedAvgSaleWeightKg" type="number" min="0" step="any" className="input" defaultValue={projection.expectedAvgSaleWeightKg || ''} placeholder="Enter estimate" /></label>
                       <label><span className="label">Expected price per kg (₱)</span><input name="expectedPricePerKg" type="number" min="0" step="0.01" className="input" defaultValue={projection.expectedPricePerKg || ''} placeholder="Enter estimate" /></label>

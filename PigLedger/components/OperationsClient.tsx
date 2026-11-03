@@ -288,11 +288,11 @@ export default function OperationsClient() {
         {activeBatches.length > 0 ? (
           <form action={handlePopulation} className="space-y-3 border-t border-slate-100 pt-3">
             <h4 className="text-sm font-semibold">Record a population movement</h4>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label><span className="label">Batch</span><select className="input" name="batchId" required>{activeBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
               <label><span className="label">Movement</span><select className="input" name="movementType">{Object.entries(MOVEMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label><span className="label">Date</span><input className="input" type="date" name="movementDate" defaultValue={today()} required /></label>
               <label><span className="label">Number of pigs</span><input className="input" name="heads" type="number" min="1" step="1" inputMode="numeric" required /></label>
             </div>
@@ -334,7 +334,7 @@ export default function OperationsClient() {
         <form action={handleProduct} className="space-y-3 border-t border-slate-100 pt-3">
           <h4 className="text-sm font-semibold">Add feed product</h4>
           <label className="block"><span className="label">Product name</span><input className="input" name="name" placeholder="e.g. Starter feed" required /></label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label><span className="label">Feed category</span><select name="category" className="input">{FEED_CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label><span className="label">Purchase unit</span><select name="unit" className="input">{UNITS.filter((item) => ['Sack', 'Kg', 'Bag'].includes(item)).map((item) => <option key={item}>{item}</option>)}</select></label>
           </div>
@@ -347,7 +347,7 @@ export default function OperationsClient() {
             <form action={handlePurchase} className="space-y-3 border-t border-slate-100 pt-3">
               <h4 className="text-sm font-semibold">Record feed purchase</h4>
               <label className="block"><span className="label">Feed product</span><select className="input" name="productId">{ledger.feedProducts.filter((product) => product.isActive).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label><span className="label">Date</span><input className="input" name="movementDate" type="date" defaultValue={today()} required /></label>
                 <label><span className="label">Quantity (units)</span><input className="input" name="quantityUnits" type="number" min="0.01" step="any" required /></label>
               </div>
@@ -359,7 +359,7 @@ export default function OperationsClient() {
               <h4 className="text-sm font-semibold">Record a stock adjustment or waste</h4>
               <label className="block"><span className="label">Feed product</span><select className="input" name="productId">{ledger.feedProducts.filter((product) => product.isActive).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
               <label className="block"><span className="label">Movement type</span><select className="input" name="movementType"><option value="adjustment_in">Add opening / corrected stock</option><option value="adjustment_out">Remove excess / corrected stock</option><option value="waste">Record spoiled or wasted feed</option></select></label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label><span className="label">Date</span><input className="input" name="movementDate" type="date" defaultValue={today()} required /></label>
                 <label><span className="label">Quantity (units)</span><input className="input" name="quantityUnits" type="number" min="0.01" step="any" required /></label>
               </div>
@@ -379,7 +379,7 @@ export default function OperationsClient() {
           <form action={handleConsumption} className="space-y-3">
             <label className="block"><span className="label">Feed product</span><select className="input" name="productId">{ledger.feedProducts.filter((product) => product.isActive).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
             <label className="block"><span className="label">Batch</span><select className="input" name="batchId">{activeBatches.map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label><span className="label">Date</span><input className="input" name="consumptionDate" type="date" defaultValue={today()} required /></label>
               <label><span className="label">Quantity (units)</span><input className="input" name="quantityUnits" type="number" min="0.01" step="any" required /></label>
             </div>
